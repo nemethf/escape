@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<config xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+  <arp xmlns="http://netconfcentral.org/ns/yuma-arp">
+  </arp>
+  <interfaces xmlns="http://netconfcentral.org/ns/yuma-interfaces">
+    <interface>
+      <name>eth0</name>
+    </interface>
+    <interface>
+      <name>lo</name>
+    </interface>
+  </interfaces>
+  <nacm xmlns="http://netconfcentral.org/ns/yuma-nacm">
+  </nacm>
+
+  <vnf_starter xmlns="http://csikor.tmit.bme.hu/netconf/unify/vnf_starter">
+    <agent_name>{{AGT}}</agent_name>
+    {% for sw in SWITCHES %}
+    <switch_id>{{sw}}</switch_id>
+    {% endfor %}
+    <click_port_min>{{PORT_MIN}}</click_port_min>
+    <click_port_max>{{PORT_MAX}}</click_port_max>
+
+    {% for vnf in VNFS %}
+    <available_vnfs>
+      <vnf_type>{{vnf}}</vnf_type>
+      <vnf_description>clickhelper.py type={{vnf}}</vnf_description>
+    </available_vnfs>
+    {% endfor %}
+  </vnf_starter>
+</config>

@@ -1,0 +1,13 @@
+#!/bin/bash
+
+# run the demo even if eclipse is unavailable 
+
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )/.." && pwd )"
+PYTHONPATH=$PYTHONPATH:$DIR/mininet
+PYTHONPATH=$PYTHONPATH:$DIR/pox
+PYTHONPATH=$PYTHONPATH:$DIR/our_controller
+PYTHONPATH=$PYTHONPATH:$DIR/orchestrator
+PYTHONPATH=$PYTHONPATH:$DIR/Unify_ncclient
+export PYTHONPATH
+
+python gui-demo.py

@@ -1,0 +1,11 @@
+output :: Queue() -> ToDevice({{VNFDEV0}});
+
+        FromDevice({{VNFDEV0}})
+        -> c :: Classifier(12/22F1, -)
+        -> cnt :: Counter()
+        -> Strip(14)
+        -> decompr :: RFC2507Decomp()
+        -> EtherEncap(0x0800, 2:2:2:2:2:2, 6:5:4:3:2:1)
+        -> output
+        c[1] -> output
+

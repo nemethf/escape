@@ -1,0 +1,247 @@
+module starter
+{
+    namespace "http://csikor.tmit.bme.hu/netconf/unify/starter";
+    
+    prefix "starter";
+    
+    organization "BME-TMIT";
+    
+    contact "Levente Csikor <csikor@tmit.bme.hu>";
+    
+    description "Basic test module to initiate stuffs";
+    
+    revision 2013-03-13 
+	{
+    	description "Initiator module in progress.";
+   }
+
+// ---------------------------------- HERE STARTS THE MAIN CONTAINER ----------------------------------------
+	container starter
+	{
+		description "Starter of a service";
+
+		leaf appName
+		{
+			type string;
+			config true;
+			description "Application data";
+		}
+		leaf appParams
+		{
+			type string;
+			config true;
+			description "Application parameters";
+		}	
+
+		leaf-list capabilities
+		{
+			type string;
+			description "The name of the apps that this module can start";
+		}
+	}
+
+
+// ----------------------------------- RPCs -----------------------------------------
+	
+
+// ---------------------------------- VNF -------------------------------------	
+	rpc starter_start-vnf
+	{
+		description "This RCP will start a VNF.";
+		
+		input
+		{
+			leaf port
+			{
+				type string;
+				description "Port number for Click";
+				mandatory true;			
+			}
+			
+			leaf clickDescription
+			{
+				description "Click-desired description of the VNF";
+				type string;
+				mandatory true;							
+			}	
+		}	
+		
+		output
+		{
+			leaf vnfID
+			{
+				description "A unique ID of the started VNF.";
+				type string;
+				mandatory true;			
+			}			
+		}
+			
+	}
+	
+	
+	rpc starter_kill-vnf
+	{
+		description "This RPC will kill a particular VNF.";
+		
+		input
+		{
+			leaf vnfID	
+			{
+				description "The ID of the VNF, which was assigned by the NETCONF agent";
+				type string;
+				mandatory true;
+			}	
+		}
+		
+		output
+		{
+			leaf success
+			{
+				description "Success of killing";
+				type string;			
+			}			
+		}	
+	}
+
+
+// =================================== END VNF =================================
+	
+		
+	rpc starter_get-load
+	{
+		description "This RPC returns the actual load of the system.";
+		output
+		{
+		
+//			leaf load
+//			{
+//				type string;
+//				description "Linux style LOAD_AVG as a string.";
+//				mandatory true;
+//			}
+
+			list load
+			{
+				key "loadOne";
+				config false;
+				leaf loadOne
+				{
+					type string;
+					description "Average load in 1 minute";
+					mandatory true;				
+				}
+
+				leaf loadFive
+				{
+					type string;
+					description "Average load in 5 minutes";	
+					mandatory true;		
+				}
+
+				leaf loadFifteen
+				{
+					type string;
+					description "Average load in 15 minutes";
+					mandatory true;
+				}
+				
+				leaf processesCurrentlyExists
+				{
+					type string;
+					description "For instance, 1/25, where the first number indicates 
+					the currently executing kernel scheduling entities (processes,threads) -
+					this will be less than or equal to the number of CPUs.
+					The value after the slash is the number of kernel scheduling entities that 
+					currently exist on the system";
+					mandatory true;				
+				}
+				
+				leaf pid
+				{
+					type string;
+					description "PID of the process that was most recently created on the system";
+					mandatory true;				
+				}
+			}	
+		
+		}	
+	}	
+	
+	
+	
+	rpc starter_get-processes
+	{
+		description "This RCP will send back the processes and their pids that were run by the netconf agent.";
+		
+		output
+		{
+			leaf processes
+			{
+				type string;
+				description "The PIDs as a string array.";
+				mandatory true;
+			}		
+		}	
+	}
+	
+// ------------------------------- END OF RPCs -----------------------------------------	
+	
+	
+	
+// ---------------------------------- NOTIFICATIONS ------------------------------------
+	notification processData
+	{
+		description "This notification is indicated right after a process is executed, and it returns the process name and ID.
+						 With this extension the client will only know the PIDs that were initiated by itself.";
+						 
+		leaf processName
+		{
+			type string;	
+			description "Name of the process.";
+			mandatory true;	
+		}	
+		
+		leaf processID
+		{
+			type int32;
+			description "PID of the process.";
+			mandatory true;		
+		}
+	}
+	
+	
+	notification processDone
+	{
+		description "Indicates that a process has completed.";
+		
+		leaf processStatus
+		{
+			description "Indicates the status of the process.";
+			type enumeration
+			{
+				enum done
+				{
+					description "Process exited normally";				
+				}			
+				enum cancelled
+				{
+					description "Process was cancelled/killed";
+				}
+				enum error
+				{
+					description "There was an error during the process";				
+				}
+			}
+		}
+		
+		leaf etc
+		{
+			description "Anything else that should be sent.";
+			type string;
+			default " - nothing special -";		
+		}
+	}
+// --------------------------- END OF NOTIFICATIONS -----------------------------------
+
+}
+// --------------------------- END OF MAIN CONTAINER ----------------------------------

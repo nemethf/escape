@@ -1,0 +1,56 @@
+// clicky.ccss
+
+Queue {
+decorations: fullness;
+}
+
+* Counter {
+    min-length: 49.6px;
+    style: queue;
+    orientation: reverse horizontal;
+}
+rateness {
+    style: fullness;
+    length: byte_rate;
+    capacity: 2500000;
+    color: rgba(0%, 0%, 100%, 20%);
+    autorefresh: length 0.5s;
+}
+
+Counter {
+decorations: rateness;
+text: "%n\nTransmission rate\n<b>%{byte_rate}</b>\n<small>%c</small>";
+}
+
+Counter handler#count {
+autorefresh: 100ms;
+}
+
+Counter handler#rate {
+autorefresh: 100ms;
+}
+
+Counter handler#bit_rate {
+autorefresh: 100ms;
+}
+
+Counter handler#byte_rate {
+autorefresh: 1000ms;
+}
+
+Counter handler#byte_count {
+autorefresh: 100ms;
+}
+
+
+IPRateMonitor handler#look {
+autorefresh: 100ms;
+}
+
+ICMPPingSource {
+text: "%n\n<b>%{src}</b>\n<b>%{rtt_avg}</b>\n<small>%c</small>";
+}
+
+ICMPPingSource handler#rtt_avg {
+autorefresh: 100ms;
+}

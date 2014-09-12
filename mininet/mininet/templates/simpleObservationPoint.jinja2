@@ -1,0 +1,32 @@
+        FromDevice({{VNFDEV0}}, METHOD {{METHOD}}) -> tee::Tee(2);
+
+        output :: Queue() -> ToDevice({{VNFDEV0}});
+
+        // To put into a service chain edit this
+        tee[0] -> cnt :: Counter() -> output;
+
+        // tee[1]
+        // -> c :: Classifier(12/0800, 12/0806 20/0002)
+        // -> CheckIPHeader(14)
+        // -> ip :: IPClassifier(icmp echo-reply)
+        // -> ping :: ICMPPingSource({{VNFDEV0}}, {{DADDR}}, INTERVAL {{INTERVAL}},LIMIT {{LIMIT}}, ACTIVE false)
+        // -> SetIPAddress({{GW}})
+        // -> arpq :: ARPQuerier({{VNFDEV0}})
+        // -> output;
+
+        // arpq[1]-> output;
+        // c[1]-> [1] arpq;
+
+        cl :: Classifier(12/0800,-)
+        af :: AggregateIPFlows(TRACEINFO alma.xml)
+
+        tee[1] -> cl
+        -> Strip(14)
+        -> CheckIPHeader
+        -> af
+        -> AggregateCounter
+        -> IPRateMonitor(PACKETS, 0.5, 256, 600)
+        -> Discard;
+
+        cl[1]->Discard;
+

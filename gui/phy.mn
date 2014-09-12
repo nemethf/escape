@@ -1,0 +1,222 @@
+{
+    "controllers": [
+        {
+            "opts": {
+                "_id": "c1",
+                "canvas_id": 1,
+                "controllerType": "remote",
+                "hostname": "c0",
+                "node_type": "C",
+                "remoteIP": "127.0.0.1",
+                "remotePort": 6633
+            },
+            "x": "370.0",
+            "y": "98.0"
+        }
+    ],
+    "hosts": [
+        {
+            "number": "2",
+            "opts": {
+                "_id": "h2",
+                "canvas_id": 4,
+                "cpu": 0.9,
+                "hostname": "Container5",
+                "mem": 0.3,
+                "nodeNum": 2,
+                "node_type": "HOST",
+                "res": {
+                    "cpu": 0.9,
+                    "mem": 0.3
+                }
+            },
+            "x": "712.0",
+            "y": "206.0"
+        },
+        {
+            "number": "1",
+            "opts": {
+                "_id": "h1",
+                "canvas_id": 2,
+                "cpu": 1.0,
+                "ee_type": "static",
+                "hostname": "Container3",
+                "local_intf_name": "veth0",
+                "mem": 1.0,
+                "netconf_passwd": "jelszo",
+                "netconf_username": "felhasznalonev",
+                "nodeNum": 1,
+                "node_type": "HOST",
+                "remote_conf_ip": "1.2.3.4",
+                "remote_dpid": "a",
+                "remote_mac": "00:11:22:33:44:55",
+                "remote_netconf_port": 830,
+                "remote_port": 2,
+                "res": {
+                    "cpu": 1.0,
+                    "mem": 1.0
+                },
+                "sched": "host"
+            },
+            "x": "112.0",
+            "y": "317.0"
+        },
+        {
+            "number": "5",
+            "opts": {
+                "_id": "h5",
+                "canvas_id": 3,
+                "cpu": 0.2,
+                "hostname": "Container4",
+                "mem": 1.0,
+                "nodeNum": 5,
+                "node_type": "HOST",
+                "res": {
+                    "cpu": 0.2,
+                    "mem": 1.0
+                }
+            },
+            "x": "640.0",
+            "y": "332.0"
+        }
+    ],
+    "links": [
+        {
+            "dest": "s1",
+            "opts": {
+                "delay": 3.0
+            },
+            "src": "sap1"
+        },
+        {
+            "dest": "Container3",
+            "opts": {
+                "delay": 2.0
+            },
+            "src": "s1"
+        },
+        {
+            "dest": "s2",
+            "opts": {
+                "bw": 2,
+                "delay": 2.0
+            },
+            "src": "s1"
+        },
+        {
+            "dest": "s3",
+            "opts": {
+                "delay": 1.0
+            },
+            "src": "s2"
+        },
+        {
+            "dest": "sap2",
+            "opts": {
+                "delay": 1.0
+            },
+            "src": "s3"
+        },
+        {
+            "dest": "Container5",
+            "opts": {
+                "delay": 1.0
+            },
+            "src": "s3"
+        },
+        {
+            "dest": "Container4",
+            "opts": {
+                "delay": 5.0
+            },
+            "src": "s3"
+        }
+    ],
+    "startpoints": [
+        {
+            "number": "3",
+            "opts": {
+                "_id": "sap1",
+                "canvas_id": 6,
+                "name": "sap1",
+                "nodeNum": 3,
+                "node_type": "SAP"
+            },
+            "x": "123.0",
+            "y": "111.0"
+        },
+        {
+            "number": "4",
+            "opts": {
+                "_id": "sap2",
+                "canvas_id": 5,
+                "name": "sap2",
+                "nodeNum": 4,
+                "node_type": "SAP"
+            },
+            "x": "584.0",
+            "y": "119.0"
+        }
+    ],
+    "switches": [
+        {
+            "number": "3",
+            "opts": {
+                "_id": "s3",
+                "canvas_id": 9,
+                "controllers": [
+                    "c0"
+                ],
+                "hostname": "s3",
+                "netflow": "0",
+                "nodeNum": 3,
+                "node_type": "SW",
+                "sflow": "0",
+                "switchIP": "",
+                "switchType": "ovs"
+            },
+            "x": "543.0",
+            "y": "202.0"
+        },
+        {
+            "number": "1",
+            "opts": {
+                "_id": "s1",
+                "canvas_id": 7,
+                "controllers": [
+                    "c0"
+                ],
+                "hostname": "s1",
+                "netflow": "0",
+                "nodeNum": 1,
+                "node_type": "SW",
+                "sflow": "0",
+                "switchIP": "",
+                "switchType": "ovs"
+            },
+            "x": "205.0",
+            "y": "203.0"
+        },
+        {
+            "number": "2",
+            "opts": {
+                "_id": "s2",
+                "canvas_id": 11,
+                "controllers": [
+                    "c0"
+                ],
+                "hostname": "s2",
+                "netflow": "0",
+                "nodeNum": 2,
+                "node_type": "SW",
+                "sflow": "0",
+                "switchIP": "",
+                "switchType": "ovs"
+            },
+            "x": "375.0",
+            "y": "196.0"
+        }
+    ],
+    "version": "2",
+    "vnfs": []
+}

@@ -1,0 +1,12 @@
+output :: Queue() -> Print(comp) -> ToDevice({{VNFDEV0}});
+
+        FromDevice({{VNFDEV0}})
+        -> c :: Classifier(12/0800, -)
+        -> cnt :: Counter()
+        -> Strip(14)
+        -> CheckIPHeader
+        -> compr :: RFC2507Comp()
+        -> EtherEncap(0x22F1, 1:1:1:1:1:1, FF:FF:FF:FF:FF:FF)
+        -> output
+        c[1] -> output
+

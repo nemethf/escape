@@ -1,0 +1,40 @@
+{
+    "controllers": [],
+    "hosts": [],
+    "links": [],
+    "vnfs": [],
+    "startpoints": [
+        {
+            "number": "2",
+            "opts": {
+                "canvas_id": 4,
+                "cpuCapacity": 0,
+                "cpuNeed": 0,
+                "memCapacity": 0,
+                "memNeed": 0,
+                "nodeNum": 2,
+                "nodeType": 0,
+                "name": "sap2"
+            },
+            "x": "437.0",
+            "y": "65.0"
+        },
+        {
+            "number": "1",
+            "opts": {
+                "canvas_id": 3,
+                "cpuCapacity": 0,
+                "cpuNeed": 0,
+                "memCapacity": 0,
+                "memNeed": 0,
+                "nodeNum": 1,
+                "nodeType": 0,
+                "name": "sap1"
+            },
+            "x": "195.0",
+            "y": "69.0"
+        }
+    ],
+    "switches": [],
+    "version": "2"
+}

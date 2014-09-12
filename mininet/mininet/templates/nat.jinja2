@@ -1,0 +1,46 @@
+{% for dev in DEV %}
+From{{dev.index}}::FromDevice({{dev.name}});
+{% endfor %}
+
+From{{public.index}}::FromDevice({{public.name}});
+
+{% for dev in DEV %}
+To{{dev.index}}::ToDevice({{dev.name}});
+{% endfor %}
+
+To{{public.index}}::ToDevice({{public.name}});
+
+{% for dev in DEV %}
+Cl{{dev.index}}::Classifier(12/0800,-);
+{% endfor %}
+
+Cl{{public.index}}::Classifier(12/0800,-);
+
+NAT::IPAddRewriter({% for dev in DEV %} pattern {{dev.ip1}}-{{dev.ip2}} - {{public.index}}  {{dev.index}} ,{%endfor%}drop);
+
+{% for dev in DEV %}
+Q{{dev.index}}::Queue(1000);
+{% endfor %}
+
+Q{{public.index}}::Queue(1000);
+
+{% for dev in DEV %}
+From{{dev.index}}->Cl{{dev.index}};
+{% endfor %}
+
+From{{public.index}}->Cl{{public.index}};
+
+{% for dev in DEV %}
+Cl{{dev.index}}[0]->[{{dev.index}}]NAT;
+Cl{{dev.index}}[1]->Discard;
+{% endfor %}
+
+Cl{{public.index}}[0]->[{{public.index}}]NAT;
+Cl{{public.index}}[1]->Discard;
+
+{% for dev in DEV %}
+NAT[{{dev.index}}]->Q{{dev.index}}->To{{dev.index}};
+{% endfor %}
+
+NAT[{{public.index}}]->Q{{public.index}}->To{{public.index}};
+

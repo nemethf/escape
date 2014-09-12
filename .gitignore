@@ -1,0 +1,16 @@
+*~
+*.pyc
+
+#Compiled Object Files
+*.o
+*.lo
+*.slo
+
+#Compiled Dynamic Libraries
+*.so
+*.dylib
+
+#Compiled Static Libraries
+*.lai
+*.la
+*.a

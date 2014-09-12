@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<config xmlns="urn:ietf:params:xml:ns:netconf:base:1.0">
+  <arp xmlns="http://netconfcentral.org/ns/yuma-arp">
+  </arp>
+  <interfaces xmlns="http://netconfcentral.org/ns/yuma-interfaces">
+    <interface>
+      <name>eth0</name>
+    </interface>
+    <interface>
+      <name>lo</name>
+    </interface>
+  </interfaces>
+  <nacm xmlns="http://netconfcentral.org/ns/yuma-nacm">
+  </nacm>
+  
+  
+  <vnf_starter xmlns="http://csikor.tmit.bme.hu/netconf/unify/vnf_starter">
+  	<agent_name>Sonko Lee</agent_name>
+  	<switch_id>s1</switch_id>
+  	<click_port_min>8001</click_port_min>
+  	<click_port_max>8010</click_port_max>
+  	
+  	<available_vnfs>
+  		<vnf_type>NAT</vnf_type>
+  		<vnf_description>click -R -e "NAT"</vnf_description>
+		</available_vnfs>
+		<available_vnfs>
+  		<vnf_type>FIREWALL_1</vnf_type>
+  		<vnf_description>click -R -e "firewall1"</vnf_description>
+		</available_vnfs>
+  	<available_vnfs>
+  		<vnf_type>TEST</vnf_type>
+  		<vnf_description>/home/unify/test</vnf_description>
+		</available_vnfs>
+		
+  	
+  </vnf_starter>
+</config>
+
+

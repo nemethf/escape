@@ -1,0 +1,22 @@
+                                                   -*- mode: outline -*-
+* forward.png
+  URL: http://findicons.com/icon/64621/forward
+  Icon Pack: Soft
+  Designer: Asher
+  License: Creative Commons Attribution (by)
+* search.png
+  URL: http://www.iconarchive.com/show/oxygen-icons-by-oxygen-icons.org/Actions-page-zoom-icon.html
+  Artist: Oxygen Team
+  Iconset: Oxygen Icons (883 icons)
+  License: GNU Lesser General Public License
+  Commercial usage: Allowed
+* compress*.*, decompress*.*
+  Created by Levente Csikor
+  Based on Mate Faenza Icon Theme
+  URL: https://github.com/mate-desktop/mate-icon-theme-faenza/blob/master/matefaenza/mimetypes/scalable/application-x-archive.svg
+  License: GNU GENERAL PUBLIC LICENSE, Version 2
+* container*
+  Created by Levente Csikor
+  License: GNU GENERAL PUBLIC LICENSE, Version 2
+* host.png, legacy_router.png, legacy_switch.png, netlink.png, old_switch.png, select, switch, switch.png
+  These files were extracted from the original MiniEdit source

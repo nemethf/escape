@@ -1,0 +1,474 @@
+module vnf_starter
+{
+    namespace "http://csikor.tmit.bme.hu/netconf/unify/vnf_starter";
+    
+    prefix "vnf_starter";
+    
+    organization "BME-TMIT";
+    
+    contact "Levente Csikor <csikor@tmit.bme.hu>, 
+    				 Balazs Sonkoly <sonkoly@tmit.bme.hu>";
+    
+    description "Starter module for initiating and shutting down virtual network functions";
+    
+ 
+   revision 2014-05-13
+   {
+   		description "Now, this module is devoted to start and stop CLICK-based 
+   		vnfs that will be connected to a mininet switch. Basically, as mininet
+   		would do, this module starts a CLICK instance, create a virtual ethernet
+   		pair and connect it with the switch. Furthermore, the connection info will
+   		be sent back to the netconf client";
+   }
+   
+   typedef vnf_status
+   {
+	   	type enumeration
+	   	{
+	   		enum FAILED
+	   		{
+	   			value -1;
+	   		}
+	   		enum INITIALIZING
+	   		{
+	   			value 0;
+	   		}
+	   		enum UP_AND_RUNNING
+	   		{
+	   			value 1;
+	   		}
+	   		
+	   	}
+   		description "Enum for indicating statuses";
+   	}
+   	
+   	typedef connected_status
+   	{
+   		type enumeration
+   		{
+   			enum DISCONNECTED
+   			{
+   				value 0;
+   			}
+   			enum CONNECTED
+   			{
+   				value 1;
+   			}   			
+   		}
+   		description "Connection status";
+   }
+   
+   
+ // ---------------------- HERE STARTS THE MAIN CONTAINER ---------------------  
+   container vnf_starter
+   {
+	 		description "Starter of a VNF/CLICK";
+	
+			leaf agent_name
+			{
+				type string;
+				config true;
+				description "Name of the agent to provide, for instance, 
+				prefixes for virtual ethernet pairs";
+			}
+			
+			leaf-list switch_id
+			{
+				type string;
+				config true;
+				description "The id(s) of the switch(es) that will be managed by 
+				this netconf agent";
+			}
+						
+			leaf click_port_min
+			{
+				type string;
+				config true;
+				description "Lower range of the available click ports";				
+			}
+			
+			leaf click_port_max
+			{
+				type string;
+				config true;
+				description "Upper range of the available click ports";
+			}
+			
+			list available_vnfs
+			{
+				key "vnf_type";
+				config true;
+				leaf vnf_type
+				{
+					type string;
+					config true;
+					description "The pre-defined VNF/CLICKs, e.g., firewall1, 
+					firewall2, nat, dpi";
+				}
+				leaf vnf_description
+				{
+					type string;
+					config true;
+					description "The description of the VNF/CLICK. For instance, the
+					skeleton of the command that will be executed";
+				}
+				
+			}	
+			
+   }
+ 
+ 
+ // ----------------------------------- RPCs ----------------------------------
+	 rpc initiateVNF
+	 {
+			description "This RCP will start a VNF.
+			0. initiate new VNF (initiate datastructure, generate unique ID)
+			1. set its arguments (control port, control ip, and VNF type/command)
+			2. returns the connection data, which from the vnf_id is the most 
+			important";
+			
+			input
+			{
+				leaf vnf_type
+				{
+					type string;
+					description "If there are pre-defined IDs for VNFs with different
+					purposes, this leaf can be used. However, somehow the client needs to
+					know the possibilities, for instance, from the leaf-list 
+					available_vnfs";
+				}
+				leaf vnf_description
+				{
+					type string;
+					description "If there are no pre-defined vnf-types, a CLICK-description 
+					string should be set with this leaf";
+				}
+				
+				list options
+				{
+					config false;
+					description "This is an unlimited list for adding as many arguments as
+					necessary";
+					key "name";
+					leaf name
+					{
+						type string;
+						description "Name of the option, e.g., click_port, mac, fromDev";
+						
+					}
+					leaf value
+					{
+						type string;
+						description "Value of the option, e.g., 8001, 00:00:aa:21:af:11, 
+						uny_0";
+					}
+				}
+				
+			}
+			
+			output
+			{
+				list access_info
+				{
+					key "vnf_id";
+					config false;
+					leaf vnf_id
+					{
+						type string;
+						description "The generated ID for the VNF/CLICK. It is useful for 
+						the client in order to easily manage/disconnect/shut down an 
+						initiated	CLICK/VNF";
+						mandatory true;				
+					}
+								
+ 					leaf control_ip
+ 					{
+ 						type string;
+ 						description "Control IP";
+ 						default "127.0.0.1";
+ 					}
+   				leaf control_port
+   				{
+   					type string;
+   					description "Control port if Control switch is available";
+   				} 				
+					
+				}
+				
+				leaf other
+ 				{
+ 					type string;
+ 					description "This part is devoted for replying some other messages";
+ 				}
+			}
+			  
+   }
+   
+   
+   rpc connectVNF
+   {
+   		description "This RPC will practically start and connect the 
+   		initiated VNF/CLICK to the switch
+   		0. create virtualEthernet pair(s)
+   		1. connect either end of it (them) to the given switch(es)
+   		returns the connected port number(s) with the corresponding switch(es).
+   		This RPC is also used for reconnecting a VNF. In this case, however, if 
+   		the input fields are not correctly set an error occurs";
+   		
+   		input
+   		{
+   			leaf vnf_id
+   			{
+   				type string;
+   				description "This information was created by the startVNF rpc, so
+   				the client knows it";
+   				mandatory true;
+   			}
+   			
+   			leaf vnf_port
+   			{
+   				type string;
+   				description "This is the port of the vnf that needs to be connected.
+   				In particular, it is a simple identifier, e.g., 0,1,2,3";
+   				mandatory true;
+   			}
+   			
+   			leaf switch_id
+   			{
+   				type string;
+   				description "The switch id (name of the switch, e.g., s1";
+   				mandatory true;
+   			}
+   		}
+   		
+   		output
+   		{
+   			leaf port
+   			{
+   				type string;
+   				description "The port of the switch, which the VNF is connected to";
+   				mandatory true;
+   			}
+   			
+   			leaf other
+ 				{
+ 					type string;
+ 					description "This part is devoted for replying some other messages";
+ 				}
+   			
+   		}
+   }
+   
+   
+   rpc disconnectVNF
+   {
+   		description "This RPC will disconnect the VNF(s)/CLICK(s) from the 
+   		switch(es).
+   		1. ip link set uny_0 down
+   		2. ip link set uny_1 down
+   		(3. if more ports need to be disconnected, we repeat 1. and 2. with 
+   		the corresponding data";
+   		
+   		input
+   		{
+   			leaf vnf_id
+   			{
+   				type string;
+   				description "This ID is already known by the client";
+   				mandatory true;
+   			}
+   			
+   			leaf vnf_port
+   			{
+   				type string;
+   				description "The port of the VNF that needs to be disconnected,
+   				e.g., 0, 1, 2";
+   				mandatory true;
+   			}
+ 			}
+   			
+ 			output
+ 			{
+ 				leaf other
+ 				{
+ 					type string;
+ 					description "This part is devoted for replying some other messages";
+ 				}
+ 			}
+
+   }
+   
+   rpc startVNF
+   {
+   		description "This RPC will actually start the VNF/CLICK instance";
+   		
+   		input
+   		{
+   			leaf vnf_id
+	 			{
+	 				type string;
+	 				description "This ID is already known by the client";
+	 				mandatory true;
+	 			}
+   		}
+   		
+   		output
+ 			{
+ 				leaf other
+ 				{
+ 					type string;
+ 					description "This part is devoted for replying some other messages";
+ 				}
+ 			}
+   }
+   
+   rpc stopVNF
+   {
+   		description "This RPC will gracefully shut down the VNF/CLICK instance
+   		0. if disconnect() was not called before, we call it
+   		1. delete virtual ethernet pairs
+   		2. stop (kill) click
+   		3. remove vnf's data from the data structure
+   		";
+   		
+   		input
+   		{
+	   		leaf vnf_id
+	 			{
+	 				type string;
+	 				description "This ID is already known by the client";
+	 				mandatory true;
+	 			}
+ 			}
+ 			
+ 			output
+ 			{
+ 				leaf other
+ 				{
+ 					type string;
+ 					description "This part is devoted for replying some other messages";
+ 				}
+ 			}
+   }
+   
+   rpc getVNFInfo
+   {
+   		description "This RPC will send back all data of all VNFs that have
+   		been initiated by this Netconf Agent. If an input of vnf_id is set,
+   		only that vnf's data will be sent back. 
+   		Most of the data this RPC replies is used for DEBUG, however 'status' is
+   		useful for indicating to upper layers whether a VNF is UP_AND_RUNNING";
+   		
+   		input
+   		{
+   			leaf vnf_id
+   			{
+   				type string;
+   				description "The ID of the vnf for which the data we want";
+   			}
+   		}
+   		output
+   		{
+				list initiated_vnfs
+				{
+					key "vnf_id";
+					config false;
+					leaf vnf_id
+					{
+						type string;
+						description "The id of the VNF";
+					}
+					
+					leaf pid
+					{
+						type string;
+						description "The PID of the VNF";
+					}
+					
+					list link
+					{
+						key "vnf_port";
+						config false;
+						leaf vnf_port
+						{
+							type string;
+							description "The port of the VNF, e.g., 0, 1, 2";
+						}
+						
+						leaf vnf_dev
+						{
+							type string;
+							description "The link's head connected to the VNF (device name)";
+						}
+						
+						leaf vnf_dev_mac
+						{
+							type string;
+							description "The MAC address of the vnf's device"; 
+						}
+						
+						leaf sw_dev
+						{
+							type string;
+							description "The link's tail connected to the switch 
+							(device name)";
+						}
+						
+						leaf sw_id
+						{
+							type string;
+							description "The switch the link is connected to";
+						}
+						
+						leaf sw_port
+						{
+							type string;
+							description "The port of the switch the link is connected to";
+						}
+						
+						leaf connected
+						{
+							type connected_status;
+							description "The connection status of the link";
+						}
+					}
+					
+					leaf control_ip
+					{
+						type string;
+						description "The control IP";
+					}
+					
+					leaf control_port
+					{
+						type string;
+						description "The control port";
+					}	
+						
+					leaf command
+					{
+						type string;
+						description "The command of the VNF";
+					}
+					
+					leaf status
+					{
+						type vnf_status;
+						description "Enum type of VNF's status";
+					}
+					
+					leaf other
+ 					{
+ 						type string;
+ 						description "This part is devoted for replying some other 
+ 						information";
+ 					}
+					
+				}
+				
+				
+   		}
+   		
+   }
+   
+ }

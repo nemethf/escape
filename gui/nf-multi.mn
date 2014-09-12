@@ -1,0 +1,168 @@
+{
+    "controllers": [],
+    "hosts": [],
+    "links": [
+        {
+            "dest": "header_decompression",
+            "opts": {
+                "delay": 5.0
+            },
+            "src": "header_compression"
+        },
+        {
+            "dest": "sap2",
+            "opts": {
+                "delay": 5.0
+            },
+            "src": "header_decompression"
+        },
+        {
+            "dest": "header_compression",
+            "opts": {
+                "delay": 5.0
+            },
+            "src": "sap1"
+        },
+        {
+            "dest": "VNF4",
+            "opts": {},
+            "src": "sap3"
+        },
+        {
+            "dest": "VNF5",
+            "opts": {},
+            "src": "VNF4"
+        },
+        {
+            "dest": "sap4",
+            "opts": {},
+            "src": "VNF5"
+        }
+    ],
+    "startpoints": [
+        {
+            "number": "2",
+            "opts": {
+                "_id": "sap2",
+                "canvas_id": 5,
+                "name": "sap2",
+                "nodeNum": 2,
+                "node_type": "SAP"
+            },
+            "x": "437.0",
+            "y": "65.0"
+        },
+        {
+            "number": "3",
+            "opts": {
+                "_id": 0,
+                "canvas_id": 8,
+                "name": "sap3",
+                "nodeNum": 3,
+                "node_type": "SAP"
+            },
+            "x": "103.0",
+            "y": "332.0"
+        },
+        {
+            "number": "4",
+            "opts": {
+                "_id": 1,
+                "canvas_id": 6,
+                "name": "sap4",
+                "nodeNum": 4,
+                "node_type": "SAP"
+            },
+            "x": "268.0",
+            "y": "322.0"
+        },
+        {
+            "number": "1",
+            "opts": {
+                "_id": "sap1",
+                "canvas_id": 7,
+                "name": "sap1",
+                "nodeNum": 1,
+                "node_type": "SAP"
+            },
+            "x": "195.0",
+            "y": "69.0"
+        }
+    ],
+    "switches": [],
+    "version": "2",
+    "vnfs": [
+        {
+            "number": "5",
+            "opts": {
+                "_id": 2,
+                "canvas_id": 4,
+                "function": "headerCompressor",
+                "name": "VNF5",
+                "nodeNum": 5,
+                "node_type": "VNF",
+                "req": {
+                    "cpu": 0.6,
+                    "mem": 0.1
+                },
+                "vnf_type": "click_vnf"
+            },
+            "x": "297.0",
+            "y": "451.0"
+        },
+        {
+            "number": "4",
+            "opts": {
+                "_id": 0,
+                "canvas_id": 3,
+                "function": "headerDecompressor",
+                "name": "VNF4",
+                "nodeNum": 4,
+                "node_type": "VNF",
+                "req": {
+                    "cpu": 0.7,
+                    "mem": 0.1
+                },
+                "vnf_type": "click_vnf"
+            },
+            "x": "103.0",
+            "y": "446.0"
+        },
+        {
+            "number": "1",
+            "opts": {
+                "_id": "vnf1",
+                "canvas_id": 1,
+                "name": "header_compression",
+                "function": "headerCompressor",
+                "nodeNum": 1,
+                "node_type": "VNF",
+                "req": {
+                    "cpu": 0.9,
+                    "mem": 0.3
+                },
+                "vnf_type": "click_vnf"
+            },
+            "x": "196.0",
+            "y": "200.0"
+        },
+        {
+            "number": "2",
+            "opts": {
+                "_id": "vnf2",
+                "canvas_id": 2,
+                "name": "header_decompression",
+                "function": "headerDecompressor",
+                "nodeNum": 2,
+                "node_type": "VNF",
+                "req": {
+                    "cpu": 0.8,
+                    "mem": 0.3
+                },
+                "vnf_type": "click_vnf"
+            },
+            "x": "437.0",
+            "y": "201.0"
+        }
+    ]
+}
