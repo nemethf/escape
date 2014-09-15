@@ -3,9 +3,51 @@ using Mininet, Click, NETCONF and POX.
 
 * Welcome!
 
-asdf
+By going through the following steps you can reproduce our demo
+presented at SIGCOMM 2014. This walkthrough assumes that you have
+already set up [[http://sb.tmit.bme.hu/mediawiki/index.php/ESCAPE][ESCAPE]] or downloaded our prebuilt virtual image.
+
+* DEMO steps
+
+1. Boot your image ESCAPE image, this will start the ESCAPE
+   Dashboard and open this walkthrough within EMACS automatically.
+2. In the ESCAPE Dashboard go to File/Open NF chain. Choose nf.mn
+   and click Open. This will load our simple service graph
+   comprising two SAPs connected by a header compressor and
+   decompressor.
+3. For loading the physical topology go to File/Open PHY
+   topo. Choose phy.mn and click Open. Adjust the scrollbars to
+   improve visibility if necessary.
+4. Click the 'Start network' button in the bottom left corner. This
+   will start the physical topology in mininet. This can take a
+   while depending on your hardware but on not too old notebooks
+   it should take no more than a few seconds.  If everything is
+   up and running the frames of all components will be green.
+5. Click the 'Start services' button. This will start our chain
+   with all the VNFs and also POX using our traffic steering
+   module. If everything is ok the frames will be green.
+6. In the service graph panel, do a right click on sap1 and start
+   a 'Terminal'. For sap2 do the same. For the header_compression
+   and header_decompression VNFs do a right click and choose
+   'Start clicky'. This will start the Clicky GUI and connect to
+   these VNFs.
+7. In the terminal opened for sap2 run: 
+   iperf -s
+8. In the terminal opened for sap1 run:
+   iperf -c sap2
+9. Go to the Clicky GUIs of the compressor and decompressor and
+   see the counters (cnt) which indicate that your packages are
+   going through the VNFs. After iperf terminated double click on
+   the counters in the clicky GUIs and compare the byte_count
+   fields for the compressor and the decompressor. Observe that
+   the byte count of the compressor is higher than of the
+   decompressor indicating that header compression is working
+   indeed.
 
 * Further reading
+
+For more information about this demonstration and the used
+software components please visit our project page:
 
 [[http://sb.tmit.bme.hu/mediawiki/index.php/ESCAPE][Project page is at http://sb.tmit.bme.hu/mediawiki/index.php/ESCAPE]]
 
