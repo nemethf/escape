@@ -1,5 +1,5 @@
 #!/usr/bin/python
-'''
+"""
 Based on MiniEdit: a simple network editor for Mininet
 
 Bob Lantz, April 2010
@@ -7,13 +7,10 @@ Gregory Gee, July 2013
 
 Controller icon from http://semlabs.co.uk/
 OpenFlow icon from https://www.opennetworking.org/
-'''
+"""
 import threading
-import formatter
 import math
-import copy
 import tkFont
-import csv
 import tkFileDialog
 import tkSimpleDialog
 import re
@@ -22,35 +19,28 @@ import os
 import sys
 import logging
 import Queue
-import Utils
-
-from time import sleep
-from string import Formatter
-from optparse import OptionParser
 from subprocess import call
 from distutils.version import StrictVersion
 from PIL import ImageTk, Image
-
-# from Tkinter import *
+import Utils
+from Utils import LoggerHelper
+import traceback
+import argparse
+from collections import namedtuple
+import Tkinter as tk
 from Tkinter import LabelFrame, Frame, Menu, Canvas, Scrollbar, Label, Entry,\
-                    BitmapImage, PhotoImage, Button, Text, Wm, Toplevel, \
+                    BitmapImage, Button, Wm, Toplevel, \
                     Checkbutton, PanedWindow, \
-                    N, NE, E, SE, S, SW, W, NW, EW, X, Y, FALSE, TRUE,\
-                    CENTER, LEFT, RIGHT, BOTTOM, SOLID, VERTICAL, BOTH, ALL, \
+                    N, E, S, W, NW, EW, Y, FALSE, TRUE,\
+                    CENTER, LEFT, RIGHT, SOLID, VERTICAL, BOTH, \
                     TclError, StringVar, IntVar, OptionMenu, \
                     DISABLED, NORMAL, END
-from tkMessageBox import showinfo, showerror, showwarning
+import tkMessageBox
 
-from mininet.net import Mininet, VERSION
-from mininet.util import ipStr, netParse, ipAdd, quietRun
-from mininet.util import buildTopo
+from mininet.net import VERSION
+from mininet.util import quietRun
 from mininet.term import makeTerm, cleanUpScreens
-from mininet.node import Controller, RemoteController, NOX, OVSController, EE
-from mininet.node import CPULimitedHost, Host, Node
-from mininet.node import OVSKernelSwitch, OVSSwitch, UserSwitch
-from mininet.link import TCLink, Intf, Link
-from mininet.cli import CLI
-from mininet.moduledeps import moduleDeps, pathCheck
+from mininet.node import Controller, RemoteController, NOX, OVSController
 from mininet.topo import SingleSwitchTopo, LinearTopo, SingleSwitchReversedTopo
 from mininet.topolib import TreeTopo
 from mininet.vnfcatalog import Catalog
@@ -58,28 +48,14 @@ from mininet import cli
 
 import pox
 from pox import core, boot
-# from pox.core import core
-# from pox.boot import boot
 import networkx
 
 import traffic_steering
 import Orchestrator
-
-import Tkinter as tk
-from __builtin__ import isinstance
-from CoreInitListener import CoreInitListener
-from pprint import pprint
-from NetworkManager import NetworkManagerMininet
-from CustomNetworkElements import InbandController, customOvs, \
-                                  CustomUserSwitch, LegacyRouter, LegacySwitch
-import traceback
-import tkMessageBox
-import thread
-from collections import namedtuple
-from Utils import LoggerHelper
 from Orchestrator import NodeManagerMininetWrapper
-import argparse
-
+from CoreInitListener import CoreInitListener
+from NetworkManager import NetworkManagerMininet
+from Utils import dump
 MINIEDIT_VERSION = '2.1.0.8'
 
 resource_folder = os.path.join("..", "res")
@@ -88,11 +64,6 @@ def resource_path(res):
 
 if 'PYTHONPATH' in os.environ:
     sys.path = os.environ[ 'PYTHONPATH' ].split( ':' ) + sys.path
-
-# someday: from ttk import *
-# print 'MiniEdit running against MiniNet '+VERSION
-if StrictVersion(VERSION) > StrictVersion('2.0'):
-    from mininet.node import IVSSwitch
 
 TOPODEF = 'none'
 TOPOS = { 'minimal': lambda: SingleSwitchTopo( k=2 ),
@@ -226,7 +197,7 @@ class LogWindow(Frame, LoggerHelper):
         self.log_text.config(state=NORMAL)
         self.log_text.delete('1.0', tk.END)
         self.log_text.config(state=DISABLED)
-        for line in self.log_messages.splitlines(1):
+        for line in self.log_messages.splitlines(True):
             self.log(line)
 
     def parse_pattern(self, *args):
@@ -236,7 +207,7 @@ class LogWindow(Frame, LoggerHelper):
         self._debug('change log regex to %s' % pattern)
         self.reload_logs()
 
-
+# Edit menu -> Preferences
 class PrefsDialog(tkSimpleDialog.Dialog):
 
         def __init__(self, parent, title, prefDefaults):
@@ -422,7 +393,7 @@ class PrefsDialog(tkSimpleDialog.Dialog):
                 self.result['switchType'] = 'ivs'
                 if StrictVersion(VERSION) < StrictVersion('2.1'):
                     self.ovsOk = False
-                    showerror(title="Error",
+                    tkMessageBox.showerror(title="Error",
                               message='MiniNet version 2.1+ required. You have '+VERSION+'.')
             elif sw == 'Userspace Switch':
                 self.result['switchType'] = 'user'
@@ -436,13 +407,13 @@ class PrefsDialog(tkSimpleDialog.Dialog):
                 ovsVer = self.getOvsVersion()
                 if StrictVersion(ovsVer) < StrictVersion('2.0'):
                     self.ovsOk = False
-                    showerror(title="Error",
+                    tkMessageBox.showerror(title="Error",
                               message='Open vSwitch version 2.0+ required. You have '+ovsVer+'.')
             if ovsOf12 == "1" or ovsOf13 == "1":
                 ovsVer = self.getOvsVersion()
                 if StrictVersion(ovsVer) < StrictVersion('1.10'):
                     self.ovsOk = False
-                    showerror(title="Error",
+                    tkMessageBox.showerror(title="Error",
                               message='Open vSwitch version 1.10+ required. You have '+ovsVer+'.')
 
             if self.ovsOk:
@@ -464,6 +435,7 @@ class PrefsDialog(tkSimpleDialog.Dialog):
                 print 'Open vSwitch version is '+m.group(1)
                 return m.group(1)
 
+# Superclass for Properties Dialog
 class CustomDialog(object):
 
         # TODO: Fix button placement and Title and window focus lock
@@ -499,9 +471,11 @@ class CustomDialog(object):
             canlceButton.grid(row=0, column=1, sticky=W)
 
         def body(self, master):
+            # create dialog body.  return widget that should have initial focus.  this method should be overridden
             self.rootFrame = master
 
         def apply(self):
+            # invoked if OK button pressed
             self.top.destroy()
 
         def cancelAction(self):
@@ -566,18 +540,16 @@ class CustomDialog(object):
             if trace:
                 var.trace('w', trace)
 
+# Container element -> Properties
 class HostDialog(CustomDialog):
 
         def __init__(self, master, title, prefDefaults):
-
             self.prefValues = prefDefaults
             self.result = {}
-
             CustomDialog.__init__(self, master, title)
 
         def body(self, master):
             self.addFrames(master)
-
             self.ee_types = ['static', 'netconf', 'remote']
             self.addField('Name:', 'hostname')
             self.addField('Cpu capacity:', 'cpu')
@@ -693,7 +665,7 @@ class HostDialog(CustomDialog):
 #                     row > 0):
 #                     vlanInterfaces.append([self.vlanTableFrame.get(row, 0), self.vlanTableFrame.get(row, 1)])
 
-            for o in ['mem', 'cpu', 'hostname', 'sched', 'ee_type',
+            for o in ['hostname', 'sched', 'ee_type',
                       'remote_dpid', 'remote_port', 'remote_conf_ip',
                       'remote_netconf_port', 'netconf_username',
                       'netconf_passwd', 'local_intf_name']:
@@ -702,11 +674,20 @@ class HostDialog(CustomDialog):
                     self.result[o] = var.get()
                 else:
                     self.result[o] = ''
+            
+            if 'res' not in self.result:
+                self.result['res'] = dict()
+            for o in ['mem', 'cpu']:
+                var = self.opt.get(o)
+                if var:
+                    self.result['res'][o] = var.get()
+                else:
+                    self.result['res'][o] = ''
 
+# VNF element -> Properties
 class VnfDialog(CustomDialog):
 
         def __init__(self, master, title, prefDefaults):
-
             self.prefValues = prefDefaults
             self.result = {}
             CustomDialog.__init__(self, master, title)
@@ -733,35 +714,32 @@ class VnfDialog(CustomDialog):
             for o in ['name', 'function', 'mem', 'cpu']:
                 self.result[o] = self.opt.get(o).get()
 
+# SAP element -> Properties
 class StartpointDialog(CustomDialog):
 
         def __init__(self, master, title, prefDefaults):
-
             self.prefValues = prefDefaults
             self.result = {}
-
             CustomDialog.__init__(self, master, title)
 
         def body(self, master):
             self.addFrames(master)
-
             self.addField('Name:', 'name')
 
         def apply(self):
             for o in ['name']:
                 self.result[o] = self.opt.get(o).get()
 
+# OF switch element -> Properties
 class SwitchDialog(CustomDialog):
 
         def __init__(self, master, title, prefDefaults):
-
             self.prefValues = prefDefaults
             self.result = None
             CustomDialog.__init__(self, master, title)
 
         def body(self, master):
             self.rootFrame = master
-
             rowCount = 0
             externalInterfaces = []
             if 'externalInterfaces' in self.prefValues:
@@ -815,7 +793,9 @@ class SwitchDialog(CustomDialog):
 
             # Selection of switch type
             Label(self.fieldFrame, text="Switch Type:").grid(row=rowCount, sticky=E)
+            
             self.switchType = StringVar(self.fieldFrame)
+            
             self.switchTypeMenu = OptionMenu(self.fieldFrame, self.switchType, "Default", "Open vSwitch", "Indigo Virtual Switch", "Userspace Switch", "Userspace Switch inNamespace")
             self.switchTypeMenu.grid(row=rowCount, column=1, sticky=W)
             if 'switchType' in self.prefValues:
@@ -836,6 +816,7 @@ class SwitchDialog(CustomDialog):
 
             # Field for Switch IP
             Label(self.fieldFrame, text="IP Address:").grid(row=rowCount, sticky=E)
+            
             self.ipEntry = Entry(self.fieldFrame)
             self.ipEntry.grid(row=rowCount, column=1)
             if 'switchIP' in self.prefValues:
@@ -844,6 +825,7 @@ class SwitchDialog(CustomDialog):
 
             # Field for DPCTL port
             Label(self.fieldFrame, text="DPCTL port:").grid(row=rowCount, sticky=E)
+            
             self.dpctlEntry = Entry(self.fieldFrame)
             self.dpctlEntry.grid(row=rowCount, column=1)
             if 'dpctl' in self.prefValues:
@@ -852,11 +834,14 @@ class SwitchDialog(CustomDialog):
 
             # External Interfaces
             Label(self.fieldFrame, text="External Interface:").grid(row=rowCount, sticky=E)
+            
             self.b = Button( self.fieldFrame, text='Add', command=self.addInterface)
             self.b.grid(row=rowCount, column=1)
 
+            
             self.interfaceFrame = VerticalScrolledTable(self.rootFrame, rows=0, columns=1, title='External Interfaces')
             self.interfaceFrame.grid(row=2, column=0, sticky='nswe')
+            
             self.tableFrame = self.interfaceFrame.interior
 
             # Add defined interfaces
@@ -867,8 +852,9 @@ class SwitchDialog(CustomDialog):
         def addInterface( self ):
             self.tableFrame.addRow()
 
+        
         def defaultDpid( self ,name):
-            "Derive dpid from switch name, s1 -> 1"
+            """Derive dpid from switch name, s1 -> 1"""
             try:
                 dpid = int( re.findall( r'\d+', name )[ 0 ] )
                 dpid = hex( dpid )[ 2: ]
@@ -883,13 +869,13 @@ class SwitchDialog(CustomDialog):
             externalInterfaces = []
             for row in range(self.tableFrame.rows):
                 #print 'Interface is ' + self.tableFrame.get(row, 0)
-                if (len(self.tableFrame.get(row, 0)) > 0):
+                if len(self.tableFrame.get(row, 0)) > 0:
                     externalInterfaces.append(self.tableFrame.get(row, 0))
 
             dpid = self.dpidEntry.get()
             if (self.defaultDpid(self.hostnameEntry.get()) is None
                and len(dpid) == 0):
-                showerror(title="Error",
+                tkMessageBox.showerror(title="Error",
                               message= 'Unable to derive default datapath ID - '
                                  'please either specify a DPID or use a '
                                  'canonical switch name such as s23.' )
@@ -915,6 +901,7 @@ class SwitchDialog(CustomDialog):
                 results['switchType'] = 'default'
             self.result = results
 
+# Representation feature
 class VerticalScrolledTable(LabelFrame):
     """A pure Tkinter scrollable frame that actually works!
 
@@ -946,6 +933,7 @@ class VerticalScrolledTable(LabelFrame):
 
         # track changes to the canvas and frame width and sync them,
         # also updating the scrollbar
+        
         def _configure_interior(event):
             # update the scrollbars to match the size of the inner frame
             size = (interior.winfo_reqwidth(), interior.winfo_reqheight())
@@ -955,6 +943,7 @@ class VerticalScrolledTable(LabelFrame):
                 canvas.config(width=interior.winfo_reqwidth())
         interior.bind('<Configure>', _configure_interior)
 
+        
         def _configure_canvas(event):
             if interior.winfo_reqwidth() != canvas.winfo_width():
                 # update the inner frame's width to fill the canvas
@@ -963,6 +952,7 @@ class VerticalScrolledTable(LabelFrame):
 
         return
 
+# Representation feature
 class TableFrame(Frame):
     def __init__(self, parent, rows=2, columns=2):
 
@@ -994,13 +984,14 @@ class TableFrame(Frame):
             label.grid(row=self.rows, column=column, sticky="wens", padx=1, pady=1)
             if value is not None:
                 label.insert(0, value[column])
-            if (readonly == True):
+            if readonly:
                 label.configure(state='readonly')
             current_row.append(label)
         self._widgets.append(current_row)
         self.update_idletasks()
         self.rows += 1
 
+# Link element -> Properties
 class LinkDialog(tkSimpleDialog.Dialog):
 
         def __init__(self, parent, title, linkDefaults):
@@ -1011,8 +1002,10 @@ class LinkDialog(tkSimpleDialog.Dialog):
 
         def body(self, master):
 
+            
             self.var = StringVar(master)
             Label(master, text="Bandwidth:").grid(row=0, sticky=E)
+            
             self.e1 = Entry(master)
             self.e1.grid(row=0, column=1)
             Label(master, text="Mbit").grid(row=0, column=2, sticky=W)
@@ -1020,6 +1013,7 @@ class LinkDialog(tkSimpleDialog.Dialog):
                 self.e1.insert(0,str(self.linkValues['bw']))
 
             Label(master, text="Delay:").grid(row=1, sticky=E)
+            
             self.e2 = Entry(master)
             self.e2.grid(row=1, column=1)
             Label(master, text="ms").grid(row=1, column=2, sticky=W)
@@ -1027,6 +1021,7 @@ class LinkDialog(tkSimpleDialog.Dialog):
                 self.e2.insert(0, self.linkValues['delay'])
 
             Label(master, text="Loss:").grid(row=2, sticky=E)
+            
             self.e3 = Entry(master)
             self.e3.grid(row=2, column=1)
             Label(master, text="%").grid(row=2, column=2, sticky=W)
@@ -1034,18 +1029,21 @@ class LinkDialog(tkSimpleDialog.Dialog):
                 self.e3.insert(0, str(self.linkValues['loss']))
 
             Label(master, text="Max Queue size:").grid(row=3, sticky=E)
+            
             self.e4 = Entry(master)
             self.e4.grid(row=3, column=1)
             if 'max_queue_size' in self.linkValues:
                 self.e4.insert(0, str(self.linkValues['max_queue_size']))
 
             Label(master, text="Jitter:").grid(row=4, sticky=E)
+            
             self.e5 = Entry(master)
             self.e5.grid(row=4, column=1)
             if 'jitter' in self.linkValues:
                 self.e5.insert(0, self.linkValues['jitter'])
 
             Label(master, text="Speedup:").grid(row=5, sticky=E)
+            
             self.e6 = Entry(master)
             self.e6.grid(row=5, column=1)
             if 'speedup' in self.linkValues:
@@ -1055,19 +1053,20 @@ class LinkDialog(tkSimpleDialog.Dialog):
 
         def apply(self):
             self.result = {}
-            if (len(self.e1.get()) > 0):
+            if len(self.e1.get()) > 0:
                 self.result['bw'] = int(self.e1.get())
-            if (len(self.e2.get()) > 0):
+            if len(self.e2.get()) > 0:
                 self.result['delay'] = float(self.e2.get())
-            if (len(self.e3.get()) > 0):
+            if len(self.e3.get()) > 0:
                 self.result['loss'] = int(self.e3.get())
-            if (len(self.e4.get()) > 0):
+            if len(self.e4.get()) > 0:
                 self.result['max_queue_size'] = int(self.e4.get())
-            if (len(self.e5.get()) > 0):
+            if len(self.e5.get()) > 0:
                 self.result['jitter'] = float(self.e5.get())
-            if (len(self.e6.get()) > 0):
+            if len(self.e6.get()) > 0:
                 self.result['speedup'] = int(self.e6.get())
 
+# Controller element -> Properties
 class ControllerDialog(tkSimpleDialog.Dialog):
 
         def __init__(self, parent, title, ctrlrDefaults=None):
@@ -1079,11 +1078,13 @@ class ControllerDialog(tkSimpleDialog.Dialog):
 
         def body(self, master):
 
+            
             self.var = StringVar(master)
 
             rowCount=0
             # Field for Hostname
             Label(master, text="Name:").grid(row=rowCount, sticky=E)
+            
             self.hostnameEntry = Entry(master)
             self.hostnameEntry.grid(row=rowCount, column=1)
             self.hostnameEntry.insert(0, self.ctrlrValues['hostname'])
@@ -1091,6 +1092,7 @@ class ControllerDialog(tkSimpleDialog.Dialog):
 
             # Field for Remove Controller Port
             Label(master, text="Controller Port:").grid(row=rowCount, sticky=E)
+            
             self.e2 = Entry(master)
             self.e2.grid(row=rowCount, column=1)
             self.e2.insert(0, self.ctrlrValues['remotePort'])
@@ -1099,6 +1101,7 @@ class ControllerDialog(tkSimpleDialog.Dialog):
             # Field for Controller Type
             Label(master, text="Controller Type:").grid(row=rowCount, sticky=E)
             controllerType = self.ctrlrValues['controllerType']
+            
             self.o1 = OptionMenu(master, self.var, "Remote Controller", "In-Band Controller", "OpenFlow Reference", "OVS Controller")
             self.o1.grid(row=rowCount, column=1, sticky=W)
             if controllerType == 'ref':
@@ -1116,6 +1119,7 @@ class ControllerDialog(tkSimpleDialog.Dialog):
             remoteFrame.grid(row=rowCount, column=0, columnspan=2, sticky=W)
 
             Label(remoteFrame, text="IP Address:").grid(row=0, sticky=E)
+            
             self.e1 = Entry(remoteFrame)
             self.e1.grid(row=0, column=1)
             self.e1.insert(0, self.ctrlrValues['remoteIP'])
@@ -1141,6 +1145,7 @@ class ControllerDialog(tkSimpleDialog.Dialog):
             else:
                 self.result['controllerType'] = 'ovsc'
 
+# Representation feature
 class ToolTip(object):
 
     def __init__(self, widget):
@@ -1150,7 +1155,8 @@ class ToolTip(object):
         self.x = self.y = 0
 
     def showtip(self, text):
-        "Display text in tooltip window"
+        """Display text in tooltip window"""
+        
         self.text = text
         if self.tipwindow or not self.text:
             return
@@ -1162,6 +1168,7 @@ class ToolTip(object):
         tw.wm_geometry("+%d+%d" % (x, y))
         try:
             # For Mac OS
+            
             tw.tk.call("::tk::unsupported::MacWindowStyle",
                        "style", tw._w,
                        "help", "noActivates")
@@ -1178,9 +1185,10 @@ class ToolTip(object):
         if tw:
             tw.destroy()
 
+# Main class - initialization, etc.
 class MiniEdit( Frame, Utils.LoggerHelper ):
 
-    "A simple network editor for Mininet."
+    """A simple network editor for Mininet."""
 
     def __init__( self, worker, parent=None, cheight=600, cwidth=800 ):
         sys.excepthook = self.fatal_error_handler
@@ -1225,10 +1233,16 @@ class MiniEdit( Frame, Utils.LoggerHelper ):
         self._next_node_id = 0
         self.worker = worker
 
+        # Init main modules - START
+        
+        # Init NodeManager
         self.node_manager = NodeManagerMininetWrapper()
+        # Init VNFManager
         vnf_manager = Orchestrator.VNFManager()
         vnf_manager.set_node_manager(self.node_manager)
+        # Init RouteManager
         self.rm = Orchestrator.RouteManager(vnf_manager)
+        # Init NetworkManager
         self.network_manager = NetworkManagerMininet()
 
         self.network_manager.register_listener(self.rm)
@@ -1236,11 +1250,15 @@ class MiniEdit( Frame, Utils.LoggerHelper ):
         self.network_manager.vnf_manager = vnf_manager
         self.rm.register_listener(self)
 
+        # Init network function and physical graphs
         self.nf_g = networkx.Graph()
         self.phy_g = networkx.Graph()
+        # Init Orchestrator
         self.orchestrator = Orchestrator.Orchestrator(self.network_manager,
                                                       self.rm)
 
+        # Init main modules - STOP
+        
         self._gui_event_queue = Queue.Queue()
 
         self.vnf_proc_cmd = 'grep cpu /proc/stat'
@@ -1248,6 +1266,7 @@ class MiniEdit( Frame, Utils.LoggerHelper ):
 
         self.control_buttons = dict()
 
+        # Call superclass constructor
         Frame.__init__( self, parent )
         self.action = None
         self.appName = 'ESCAPE Dashboard'
@@ -1357,11 +1376,12 @@ class MiniEdit( Frame, Utils.LoggerHelper ):
         self.bind( '<KeyPress-BackSpace>', self.deleteSelection )
         self.focus()
 
+        
         def add_menu(name, label, properties=True):
             """self.namePopup = Menu(),
             Properties menu entry will call self.nameDetails"""
             m = Menu(self.top, tearoff=0)
-            m.menu_name = name
+            m.name = name
             setattr(self, name + 'Popup', m)
             m.add_command(label=label, font=self.font, state=DISABLED,
                           background='black', foreground='white')
@@ -1374,19 +1394,20 @@ class MiniEdit( Frame, Utils.LoggerHelper ):
             return m
 
         def add_command(menu, label, cmd):
-            name = m.menu_name + 'Popup'
+            name = menu.name + 'Popup'
             c = lambda: cmd(getattr(self, name).canvas)
             menu.add_command(label=label, font=self.font, command=c)
 
-        m = add_menu('host', 'Container Options')
+        add_menu('host', 'Container Options')
 
-        m = add_menu('vnf', 'VNF Options')
+        add_menu('vnf', 'VNF Options')
 
         m = add_menu('vnfRun', 'VNF Options', False)
-        add_command(m, 'Terminal', self.xterm)
+        # runnin Terminal on VNF is disabled
+        # add_command(m, 'Terminal', self.xterm)
         add_command(m, 'Start clicky', self.start_clicky)
 
-        m = add_menu('startpoint', 'SAP Options')
+        add_menu('startpoint', 'SAP Options')
 
         m = add_menu('startpointRun', 'SAP Options', False)
         add_command(m, 'Terminal', self.xterm)
@@ -1399,18 +1420,18 @@ class MiniEdit( Frame, Utils.LoggerHelper ):
         m = add_menu('legacyRouterRun', 'Router Options', False)
         add_command(m, 'Terminal', self.xterm)
 
-        m = add_menu('switch', 'Switch Options')
+        add_menu('switch', 'Switch Options')
 
         m = add_menu('switchRun', 'Switch Options', False)
         add_command(m, 'Properties', self.switchDetails)
 
-        m = add_menu('link', 'Link Options')
+        add_menu('link', 'Link Options')
 
         m = add_menu('linkRun', 'Link Options', False)
         add_command(m, 'Link Up', self.linkUp)
         add_command(m, 'Link Down', self.linkDown)
 
-        m = add_menu('controller', 'Controller Options')
+        add_menu('controller', 'Controller Options')
 
         # Event handling initalization
         self.linkx = self.linky = self.linkItem = None
@@ -1424,6 +1445,8 @@ class MiniEdit( Frame, Utils.LoggerHelper ):
         self._update()
 
     def _update(self):
+		# Get 10 event from GUI queue and invoke referred functions
+        
         for i in xrange(10):
             try:
                 (f, args, kw) = self._gui_event_queue.get(False)
@@ -1434,8 +1457,10 @@ class MiniEdit( Frame, Utils.LoggerHelper ):
         self.after(20, self._update)
 
     def schedule(self, function, *args, **kw):
+		# Put functions in queue
         self._gui_event_queue.put((function, args, kw), block = False)
 
+    
     def gui_log_formatter(self, logrecord):
         msg = r'[l]%s[|l]([f]%s[|f]): [t]%s[|t]'%(logrecord.levelname,
                                                   logrecord.module,
@@ -1444,7 +1469,7 @@ class MiniEdit( Frame, Utils.LoggerHelper ):
         return msg
 
     def log_to_widget(self, msg):
-        asdasd
+        pass
 
     def next_id(self):
         _id = self._next_node_id
@@ -1452,19 +1477,21 @@ class MiniEdit( Frame, Utils.LoggerHelper ):
         return _id
 
     def quit( self ):
-        "Stop our network, if any, then quit."
+        """Stop our network, if any, then quit."""
         self.stop_network()
         Frame.quit( self )
 
     def createMenubar( self ):
-        "Create our menu bar."
+        """Create our menu bar."""
 
         font = self.font
 
+        
         self.mbar = mbar = Menu( self.top, font=font )
         self.top.configure( menu=mbar )
 
 
+        
         self.fileMenu = fileMenu = Menu( mbar, tearoff=False )
         mbar.add_cascade( label="File", font=font, menu=fileMenu )
         fileMenu.add_command( label="New", font=font, command=self.newTopologies )
@@ -1475,10 +1502,12 @@ class MiniEdit( Frame, Utils.LoggerHelper ):
         fileMenu.add_separator()
         fileMenu.add_command( label='Quit', command=self.quit, font=font )
 
+        
         self.editMenu = editMenu = Menu( mbar, tearoff=False )
         mbar.add_cascade( label="Edit", font=font, menu=editMenu )
         editMenu.add_command( label="Preferences", font=font, command=self.prefDetails)
 
+        
         self.runMenu = runMenu = Menu( mbar, tearoff=False )
         mbar.add_cascade( label="Run", font=font, menu=runMenu )
         runMenu.add_command( label="Run", font=font, command=self.doRun )
@@ -1491,7 +1520,7 @@ class MiniEdit( Frame, Utils.LoggerHelper ):
     # Canvas
 
     def addPane( self, name = None):
-        "Create and return our scrolling canvas frame."
+        """Create and return our scrolling canvas frame."""
         f = Frame( self.pwindow )
         canvas = Canvas( f, bg=self.bg )
         canvas.disabled = False
@@ -1528,25 +1557,28 @@ class MiniEdit( Frame, Utils.LoggerHelper ):
         self.pwindow.add( f, stretch='always' )
         return f, canvas
 
+    
     def updateScrollRegion( self, canvas ):
-        "Update canvas scroll region to hold everything."
+        """Update canvas scroll region to hold everything."""
         bbox = canvas.bbox( 'all' )
         if bbox is not None:
             canvas.configure( scrollregion=( 0, 0, bbox[ 2 ],
                                    bbox[ 3 ] ) )
 
+    
     def canvasx( self, x_root, canvas ):
-        "Convert root x coordinate to canvas coordinate."
+        """Convert root x coordinate to canvas coordinate."""
         return canvas.canvasx( x_root ) - canvas.winfo_rootx()
 
+    
     def canvasy( self, y_root, canvas ):
-        "Convert root y coordinate to canvas coordinate."
+        """Convert root y coordinate to canvas coordinate."""
         return canvas.canvasy( y_root ) - canvas.winfo_rooty()
 
     # Toolbar
 
     def activate( self, toolName ):
-        "Activate a tool and press its button."
+        """Activate a tool and press its button."""
         # Adjust button appearance
         if self.active:
             self.buttons[ self.active ].configure( relief='raised' )
@@ -1555,17 +1587,21 @@ class MiniEdit( Frame, Utils.LoggerHelper ):
         self.active = toolName
 
 
+    
     def createToolTip(self, widget, text):
         toolTip = ToolTip(widget)
+        
         def enter(event):
             toolTip.showtip(text)
+
+        
         def leave(event):
             toolTip.hidetip()
         widget.bind('<Enter>', enter)
         widget.bind('<Leave>', leave)
 
     def createToolbar( self ):
-        "Create and return our toolbar frame."
+        """Create and return our toolbar frame."""
 
         toolbar = Frame( self )
 
@@ -1630,13 +1666,18 @@ class MiniEdit( Frame, Utils.LoggerHelper ):
     def scheduleStop(self):
         self.worker.schedule(self.doStop)
 
+	# Start Service Graph operation
+    
     def doOrchestrate(self):
-
+		# Invoke the orchestration steps
         self.disable_canvas(self.nf_canvas)
         self.set_chain_related_menu(tk.DISABLED)
         self.disable_toolbar()
         self.control_buttons['Orchestrate'].config(state = tk.DISABLED)
         try:
+            # Start orchestration method - return the newly created VNFs
+            # dump(self.phy_g, 'MiniEdit phy_g topo')
+            #vnf_to_host_list = self.orchestrator.start(self.nf_g)
             vnf_to_host_list = self.orchestrator.start(self.nf_g, self.phy_g)
         except RuntimeError as e:
             #TODO: What if rollback needed?(e.g: last route hop install failed?)
@@ -1646,15 +1687,22 @@ class MiniEdit( Frame, Utils.LoggerHelper ):
             self.control_buttons['Orchestrate'].config(state = tk.NORMAL)
             return
 
-        self.draw_vnf_in_res_panel(vnf_to_host_list)
+        # self.draw_vnfs_in_res_panel(vnf_to_host_list)
+
+        # draw only static VNFs at start
+        for vnf, host in vnf_to_host_list:
+            ee_type = self.phy_g.node[host].get('ee_type')
+            if ee_type in ['static']:
+                self.draw_vnf_in_res_panel(vnf, host)
 
         self.control_buttons['StopChains'].config(state = tk.NORMAL)
 
-    def draw_vnf_in_res_panel(self, vnf_to_host_list):
+    def draw_vnfs_in_res_panel(self, vnf_to_host_list):
         distance = 60
         for vnf, host in vnf_to_host_list:
             host_id = self.phy_g.node[host]['_id'] #later host var will contain the _id
             vnf_id = self.nf_g.node[vnf]['_id']
+            
             orig_vnf = self.nf_canvas.idToWidget[vnf_id]
             widget = self.phy_canvas.idToWidget[host_id]
             host_canvas_id = self.phy_canvas.widgetToItem[widget]
@@ -1672,8 +1720,8 @@ class MiniEdit( Frame, Utils.LoggerHelper ):
             orig_opts = self.nf_canvas.vnfOpts[name]
             ee_type = self.phy_g.node[host].get('ee_type')
             if ee_type in ['netconf', 'remote']:
-                n_tags = (node)
-                l_tags = ('link')
+                n_tags = node
+                l_tags = 'link'
             else:
                 n_tags = (node, 'del_if_stopped')
                 l_tags = ('link', 'del_if_stopped')
@@ -1698,7 +1746,67 @@ class MiniEdit( Frame, Utils.LoggerHelper ):
             canvas.links[ self.link ] = {'type' :'data',
                                        'src':widget,
                                        'dest':icon}
+            # change state of VNF mapped to static node to 'running'
+            if ee_type in ['static']:
+                self.change_node_status(icon, 'running')
+
             self.link = None
+
+    def draw_vnf_in_res_panel(self, vnf, host):
+        # Draw a single VNF connecting to HOST
+        distance = 60
+        host_id = self.phy_g.node[host]['_id'] #later host var will contain the _id
+        self._debug('vnf: %s  NF_G.nodes: %s' % (vnf, self.nf_g.nodes()))
+        vnf_id = self.nf_g.node[vnf]['_id']
+        orig_vnf = self.nf_canvas.idToWidget[vnf_id]
+        widget = self.phy_canvas.idToWidget[host_id]
+        host_canvas_id = self.phy_canvas.widgetToItem[widget]
+        neighbour = len(widget.links)
+        nx, ny = self.phy_canvas.coords(host_canvas_id)
+
+        x = nx + math.sin(neighbour)*200
+        y = ny + math.cos(neighbour)*200
+        ops = {'_id': self.next_id(),
+               'node_type': self.TYPE_FUNCTION
+               }
+        node = 'Vnf'
+        name = vnf
+        canvas = self.phy_canvas
+        orig_opts = self.nf_canvas.vnfOpts[name]
+        ee_type = self.phy_g.node[host].get('ee_type')
+        if ee_type in ['netconf', 'remote']:
+            n_tags = (node)
+            l_tags = ('link')
+        else:
+            n_tags = (node, 'del_if_stopped')
+            l_tags = ('link', 'del_if_stopped')
+
+        icon = self.nodeIcon( node, name, canvas, orig_opts )
+        icon.cloned = orig_vnf
+        item = canvas.create_window( x, y, anchor=tk.CENTER, window=icon,
+                                     tags=n_tags )
+        canvas.widgetToItem[ icon ] = item
+        canvas.itemToWidget[ item ] = icon
+        canvas.nameToWidget[ name ] = icon
+        icon.links = {}
+        icon.parent_vnf = host
+        orig_vnf.parent_vnf = host
+
+        icon.bind('<Button-3>', self.do_vnfPopup )
+
+        self.link = canvas.create_line( nx, ny, x, y, width=4,
+                                        dash=(3, 3),
+                                        fill='ForestGreen', tag=l_tags )
+        widget.links[ icon ] = self.link
+        icon.links[ widget ] = self.link
+        canvas.links[ self.link ] = {'type' :'data',
+                                     'src':widget,
+                                     'dest':icon}
+        # change state of VNF mapped to static node to 'running'
+        if ee_type in ['static']:
+            self.change_node_status(icon, 'running')
+            
+        self.link = None
 
     def change_node_status(self, widget, new_status, keep=None):
         """
@@ -1725,6 +1833,12 @@ class MiniEdit( Frame, Utils.LoggerHelper ):
 
     def _handle_network_state_change(self, event):
         self.change_button_status(event.state)
+        # force 'stopped' state for all nodes if NetworkManager.DOWN
+        from NetworkManager import NetworkManagerMininet as nmm
+        if event.state == nmm.DOWN:
+            for w in self.phy_canvas.nameToWidget.values():
+                if w:
+                    self.change_node_status(w, 'stopped')
 
     def change_button_status(self, state):
         from NetworkManager import NetworkManagerMininet as nmm
@@ -1732,21 +1846,25 @@ class MiniEdit( Frame, Utils.LoggerHelper ):
                                   nmm.UP:       {'state': tk.NORMAL},
                                   nmm.DOWN:     {'state': tk.DISABLED},
                                   nmm.STARTING: {'state': tk.DISABLED},
+                                  nmm.STOPPING: {'state': tk.DISABLED},
                                   },
                   'StopChains': {nmm.SCANNED:  {'state': tk.DISABLED},
                                  nmm.UP:       {'state': tk.DISABLED},
                                  nmm.DOWN:     {'state': tk.DISABLED},
                                  nmm.STARTING: {'state': tk.DISABLED},
+                                 nmm.STOPPING: {'state': tk.DISABLED},
                                  },
                   'Stop': {nmm.SCANNED: {'state': tk.NORMAL},
                            nmm.UP:      {'state': tk.NORMAL},
                            nmm.DOWN:    {'state': tk.DISABLED},
                            nmm.STARTING:{'state': tk.DISABLED},
+                           nmm.STOPPING: {'state': tk.DISABLED},
                            },
                   'Run': {nmm.SCANNED:  {'state': tk.DISABLED},
                           nmm.UP:       {'state': tk.DISABLED},
                           nmm.DOWN:     {'state': tk.NORMAL},
                           nmm.STARTING: {'state': tk.DISABLED},
+                          nmm.STOPPING: {'state': tk.DISABLED},
                           }
                   }
         for button, c in config.iteritems():
@@ -1766,8 +1884,13 @@ class MiniEdit( Frame, Utils.LoggerHelper ):
 
     def _handle_vnf_update(self, event):
         w = self.phy_canvas.nameToWidget.get(event.name)
+        # self._debug('PHY_G before VNF_UPDATE: %s' % self.phy_g.nodes())
+        # self._debug('W: %s' % w)
+        # if not w:
+        #     return
         if not w:
-            return
+            self.draw_vnf_in_res_panel(event.name, event.on_node)
+            w = self.phy_canvas.nameToWidget.get(event.name)
         self.updateGraphEdge(event.name, w.parent_vnf, {}, self.phy_canvas)
         self.phy_g.node[event.name]['node_type'] = self.TYPE_FUNCTION
         self.change_node_status(w, event.status)
@@ -1776,20 +1899,28 @@ class MiniEdit( Frame, Utils.LoggerHelper ):
                 w = self.phy_canvas.nameToWidget[ event.name ]
                 i = self.phy_canvas.widgetToItem[ w ]
                 self.remove_one_vnf_from_res_panel(i)
+                del self.phy_canvas.nameToWidget[ event.name ]
             except KeyError:
                 pass
             self.phy_g.remove_node( event.name )
+        # self._debug('PHY_G after VNF_UPDATE: %s' % self.phy_g.nodes())
         self.rm.install_pending_routes(self.phy_g)
 
+    
     def find_link_by_ends(self, i, j, canvas):
-        w_i = canvas.nameToWidget[i]
-        w_j = canvas.nameToWidget[j]
+        try:
+            w_i = canvas.nameToWidget[i]
+            w_j = canvas.nameToWidget[j]
+        except KeyError:
+            # link has already deleted due to node delete
+            return None
         for link in w_i.links.values():
             c_link = canvas.links[link]
             if c_link['dest'] == w_j or c_link['src'] == w_j:
                 return link
         return None
 
+    
     def update_link_by_route_state(self, event):
         config = {}
         colors = {traffic_steering.RouteChanged.FAILED: 'red',
@@ -1804,6 +1935,7 @@ class MiniEdit( Frame, Utils.LoggerHelper ):
         route_id = event.id
         route_tag = 'route'+str(route_id)
 
+        
         map = ( (event.route_map['chain'], self.nf_canvas),
                 (event.route_map['res'], self.phy_canvas) )
 
@@ -1835,6 +1967,7 @@ class MiniEdit( Frame, Utils.LoggerHelper ):
     def set_nodes_status(self):
         for name, icon in self.phy_canvas.nameToWidget.iteritems():
             node = self.phy_g.node.get(name, {})
+            
             type = node.get('node_type')
             ee_type = node.get('ee_type')
             if type == self.TYPE_HOST and ee_type not in ['netconf', 'remote']:
@@ -1842,9 +1975,11 @@ class MiniEdit( Frame, Utils.LoggerHelper ):
             elif type == self.TYPE_ENDPOINT:
                 self.change_node_status(icon, 'running')
 
+    
     def enable_canvas(self, canvas):
         canvas.disabled = False
 
+    
     def disable_canvas(self, canvas):
         canvas.disabled = True
 
@@ -1856,16 +1991,20 @@ class MiniEdit( Frame, Utils.LoggerHelper ):
 
     def set_chain_related_menu(self, state):
         self.fileMenu.entryconfig(1, state = state)
-
+	
+    # Start Physical Topology operation
     def doRun( self ):
-        "Run command."
+        """Run command."""
         self.control_buttons['Run'].config(state = tk.DISABLED)
         self.activate( 'Select' )
         self.disable_canvas(self.phy_canvas)
         self.init_nodes_status()
         self.set_network_related_menu(tk.DISABLED)
 
-        self.start_network(self.phy_canvas)
+        # Start physical network according to physical graph
+        self.start_network(self.phy_g, self.appPrefs)
+        # Reset RouteManager
+        self.rm.reset()
 
         for icon in self.phy_canvas.widgetToItem:
             icon.config(bg = '#BDCDBD')
@@ -1906,27 +2045,36 @@ class MiniEdit( Frame, Utils.LoggerHelper ):
     def reset_nodes_status(self):
         for name, icon in self.phy_canvas.nameToWidget.iteritems():
             node = self.phy_g.node.get(name, {})
+            
             type = node.get('node_type')
             ee_type = node.get('ee_type')
+            
             if type == self.TYPE_HOST and ee_type not in ['netconf', 'remote']:
                 self.change_node_status(icon, 'stopped')
             elif type == self.TYPE_ENDPOINT:
                 self.change_node_status(icon, 'stopped')
 
+	# Stop Service Graph operation
+
     def doStopChains(self):
         self.control_buttons['StopChains'].config(state = tk.DISABLED)
+        # Stop service graph
         self.orchestrator.stop_service_graphs()
+		
         self.remove_vnf_from_res_panel()
         self.control_buttons['Orchestrate'].config(state = tk.NORMAL)
         self.enable_toolbar()
         self.enable_canvas(self.nf_canvas)
         self.set_chain_related_menu(tk.NORMAL)
 
+	# Stop Physical Topology operation
     def doStop( self ):
-        "Stop command."
+        """Stop command."""
+        # Stop the service chain prior
         self.doStopChains()
 
         self.enable_canvas(self.phy_canvas)
+        # Stop the physical topology
         self.stop_network()
 
         self.reset_links_color()
@@ -1938,8 +2086,8 @@ class MiniEdit( Frame, Utils.LoggerHelper ):
 
 
     def addNode( self, node, nodeNum, x, y, canvas, name=None):
-        "Add a new node to our canvas."
-        options = {}
+        """Add a new node to our canvas."""
+        options = dict()
         options['node_type']=self.TYPE_DUMMY
         if name is None:
             name = self.nodePrefixes[ node ] + nodeNum
@@ -1969,7 +2117,7 @@ class MiniEdit( Frame, Utils.LoggerHelper ):
 
 
     def addNamedNode( self, node, name, x, y, canvas, options):
-        "Add a new node to our canvas."
+        """Add a new node to our canvas."""
         icon = self.nodeIcon( node, name, canvas, options )
         item = canvas.create_window( x, y, anchor=tk.CENTER, window=icon,
                                      tags=node )
@@ -1980,6 +2128,7 @@ class MiniEdit( Frame, Utils.LoggerHelper ):
         icon.links = {}
         return icon, item
 
+    
     def loadNFTopology( self, file = None ):
         try:
             self.loadTopology(self.nf_canvas, file)
@@ -1989,28 +2138,28 @@ class MiniEdit( Frame, Utils.LoggerHelper ):
             #TODO: get file name, if we used tkFileDialog
             self._gui_warn('Can not load given topology\n%s'%e)
 
-    def loadPHYTopology( self, file = None ):
+    def loadPHYTopology( self, phy_file = None ):
         try:
-            self.loadTopology(self.phy_canvas, file)
+            self.loadTopology(self.phy_canvas, phy_file)
         except IOError as e:
-            self._gui_warn('Can not load %s physical topology\n%s'%(file, e))
+            self._gui_warn('Can not load %s physical topology\n%s'%(phy_file, e))
         except Exception as e:
             #TODO: get file name, if we used tkFileDialog
             self._gui_warn('Can not load given topology\n%s'%e)
 
-    def loadTopology( self, canvas, file = None ):
-        "Load command."
+    def loadTopology( self, canvas, topo_file = None ):
+        """Load command."""
 
         myFormats = [
             ('Mininet Topology','*.mn'),
             ('All Files','*'),
         ]
-        if file is None:
+        if topo_file is None:
             f = tkFileDialog.askopenfile(filetypes=myFormats, mode='rb')
         else:
-            f = open(file, 'rb')
+            f = open(topo_file, 'rb')
 
-        if f == None:
+        if f is None:
             return
 
         self.newTopology(canvas)
@@ -2033,11 +2182,11 @@ class MiniEdit( Frame, Utils.LoggerHelper ):
                 self.appPrefs["netflow"] = self.nflowDefaults
 
         # Load controllers
-        if ('controllers' in loadedTopology):
-            if (loadedTopology['version'] == '1'):
+        if 'controllers' in loadedTopology:
+            if loadedTopology['version'] == '1':
                 # This is old location of controller info
                 hostname = 'c0'
-                canvas.controllers = {}
+                canvas.controllers = dict()
                 canvas.controllers[hostname] = loadedTopology['controllers']['c0']
                 canvas.controllers[hostname]['hostname'] = hostname
                 self.addNode('Controller', 0, float(30), float(30), name=hostname, canvas = canvas)
@@ -2141,7 +2290,7 @@ class MiniEdit( Frame, Utils.LoggerHelper ):
                 icon.bind('<Button-3>', self.do_switchPopup )
 
             # create links to controllers
-            if (int(loadedTopology['version']) > 1):
+            if int(loadedTopology['version']) > 1:
                 controllers = canvas.switchOpts[hostname]['controllers']
                 for controller in controllers:
                     dest = self.findWidgetByName(controller, canvas)
@@ -2171,7 +2320,7 @@ class MiniEdit( Frame, Utils.LoggerHelper ):
                                                     tag='link' )
                 canvas.itemconfig(self.link, tags=canvas.gettags(self.link)+('control',))
                 self.addLink( icon, dest, canvas, linktype='control' )
-                self.createControlLinkBindings()
+                self.createControlLinkBindings(canvas)
                 self.link = self.linkWidget = None
 
         # Load links
@@ -2192,19 +2341,22 @@ class MiniEdit( Frame, Utils.LoggerHelper ):
             self.createDataLinkBindings(canvas)
             self.link = self.linkWidget = None
 
-        f.close
+        f.close()
 
+    
     def findWidgetByName( self, name, canvas ):
         for widget in canvas.widgetToItem:
             if name ==  widget[ 'text' ]:
                 return widget
 
     def newTopologies(self):
+        
         for canvas in [self.nf_canvas, self.phy_canvas]:
             self.newTopology(canvas)
 
+	# Clear the canvases - fresh start
     def newTopology( self, canvas ):
-        "New command."
+        """New command."""
         for widget in canvas.widgetToItem.keys():
             self.deleteItem( canvas.widgetToItem[ widget ], canvas )
         canvas.hostCount = 0
@@ -2226,8 +2378,9 @@ class MiniEdit( Frame, Utils.LoggerHelper ):
     def savePHYTopology(self):
         self.saveTopology(self.phy_canvas)
 
+    
     def saveTopology( self, canvas ):
-        "Save command."
+        """Save command."""
         myFormats = [
             ('Mininet Topology','*.mn'),
             ('All Files','*'),
@@ -2308,14 +2461,12 @@ class MiniEdit( Frame, Utils.LoggerHelper ):
             # Save Application preferences
             #savingDictionary['application'] = self.appPrefs
 
-            try:
-                f = open(fileName, 'wb')
-                #f.write(str(savingDictionary))
-                f.write(json.dumps(savingDictionary, sort_keys=True, indent=4, separators=(',', ': ')))
-            except Exception as er:
-                print er
-            finally:
-                f.close()
+            with open(fileName, 'wb') as f:
+                try:
+                    #f.write(str(savingDictionary))
+                    f.write(json.dumps(savingDictionary, sort_keys=True, indent=4, separators=(',', ': ')))
+                except Exception as er:
+                    print er
 
     # Generic canvas handler
     #
@@ -2325,7 +2476,7 @@ class MiniEdit( Frame, Utils.LoggerHelper ):
     # interesting introspection-based alternative to bindtags.
 
     def canvasHandle( self, eventName, event ):
-        "Generic canvas event handler"
+        """Generic canvas event handler"""
         if self.active is None or event.widget.disabled:
             return
         toolName = self.active
@@ -2336,22 +2487,23 @@ class MiniEdit( Frame, Utils.LoggerHelper ):
             handler( event )
 
     def clickCanvas( self, event ):
-        "Canvas click handler."
+        """Canvas click handler."""
         self.canvasHandle( 'click', event )
 
     def dragCanvas( self, event ):
-        "Canvas drag handler."
+        """Canvas drag handler."""
         self.canvasHandle( 'drag', event )
 
     def releaseCanvas( self, event ):
-        "Canvas mouse up handler."
+        """Canvas mouse up handler."""
         self.canvasHandle( 'release', event )
 
     # Currently the only items we can select directly are
     # links. Nodes are handled by bindings in the node icon.
 
+    
     def  findItem( self, x, y, canvas ):
-        "Find items at a location in our canvas."
+        """Find items at a location in our canvas."""
         items = canvas.find_overlapping( x, y, x, y )
         if len( items ) == 0:
             return None
@@ -2361,11 +2513,11 @@ class MiniEdit( Frame, Utils.LoggerHelper ):
     # Canvas bindings for Select, Host, Switch and Link tools
 
     def clickSelect( self, event ):
-        "Select an item."
+        """Select an item."""
         self.selectItem( self.findItem( event.x, event.y, event.widget ), event.widget.master )
 
     def deleteItem( self, item, canvas ):
-        "Delete an item."
+        """Delete an item."""
         # Don't delete while network is running
         if self.buttons[ 'Select' ][ 'state' ] == 'disabled':
             return
@@ -2377,15 +2529,17 @@ class MiniEdit( Frame, Utils.LoggerHelper ):
         # Delete from view
         canvas.delete( item )
 
+    
     def deleteSelection( self, _event ):
-        "Delete the selected item."
+        """Delete the selected item."""
         if self.selection is not None:
             canvas = self.actualCanvas
             self.deleteItem( self.selection, canvas)
         self.selectItem( None, None )
 
+    
     def nodeIcon( self, node_type, name, canvas, options={} ):
-        "Create a new node icon."
+        """Create a new node icon."""
         iconname = self.get_iconname(node_type, name, options)
         image = self.images.get(iconname, None)
         icon = Button( canvas, image=image,
@@ -2400,6 +2554,7 @@ class MiniEdit( Frame, Utils.LoggerHelper ):
         icon = canvas.itemToWidget[node_id]
         icon.configure(image=self.images[iconname])
 
+    
     def get_iconname(self, node_type, name, options={}):
         """Return the icon for a node using different sources.
 
@@ -2434,8 +2589,9 @@ class MiniEdit( Frame, Utils.LoggerHelper ):
         iconname = self.get_iconname('Vnf', name, options)
         self.set_icon(node_id, iconname, canvas)
 
+    
     def newNode( self, node, event, canvas ):
-        "Add a new node to our canvas."
+        """Add a new node to our canvas."""
         x, y = canvas.canvasx( event.x ), canvas.canvasy( event.y )
         name = self.nodePrefixes[ node ]
         _id = self.next_id()
@@ -2490,6 +2646,7 @@ class MiniEdit( Frame, Utils.LoggerHelper ):
             canvas.hostOpts[name]['node_type'] = self.TYPE_HOST
             canvas.hostOpts[name]['ee_type'] = 'static'
             canvas.hostOpts[name]['res'] = {}
+            # Why these are the default values?
             canvas.hostOpts[name]['res']['cpu'] = 0.8
             canvas.hostOpts[name]['res']['mem'] = 0.1
             canvas.hostOpts[name]['_id'] = _id
@@ -2558,35 +2715,35 @@ class MiniEdit( Frame, Utils.LoggerHelper ):
         self.updateGraphNode(name, options, canvas, item)
 
     def clickController( self, event ):
-        "Add a new Controller to our canvas."
+        """Add a new Controller to our canvas."""
         self.newNode( 'Controller', event, event.widget )
 
     def clickHost( self, event ):
-        "Add a new host to our canvas."
+        """Add a new host to our canvas."""
         self.newNode( 'Host', event, event.widget )
 
     def clickVnf( self, event ):
-        "Add a new vnf to our canvas."
+        """Add a new vnf to our canvas."""
         self.newNode( 'Vnf', event, event.widget )
 
     def clickStartpoint( self, event ):
-        "Add a new start/endpoint to our canvas."
+        """Add a new start/endpoint to our canvas."""
         self.newNode( 'Startpoint', event, event.widget )
 
     def clickLegacyRouter( self, event ):
-        "Add a new switch to our canvas."
+        """Add a new switch to our canvas."""
         self.newNode( 'LegacyRouter', event, event.widget )
 
     def clickLegacySwitch( self, event ):
-        "Add a new switch to our canvas."
+        """Add a new switch to our canvas."""
         self.newNode( 'LegacySwitch', event, event.widget )
 
     def clickSwitch( self, event ):
-        "Add a new switch to our canvas."
+        """Add a new switch to our canvas."""
         self.newNode( 'Switch', event, event.widget )
 
     def dragNetLink( self, event ):
-        "Drag a link's endpoint to another node."
+        """Drag a link's endpoint to another node."""
         if self.link is None:
             return
         canvas = event.widget.master
@@ -2595,8 +2752,9 @@ class MiniEdit( Frame, Utils.LoggerHelper ):
         y = self.canvasy( event.y_root, canvas )
         canvas.coords( self.link, self.linkx, self.linky, x, y )
 
+    
     def releaseNetLink_( self, _event, canvas ):
-        "Give up on the current link."
+        """Give up on the current link."""
         if self.link is not None:
             canvas.delete( self.link )
         self.linkWidget = self.linkItem = self.link = None
@@ -2604,7 +2762,7 @@ class MiniEdit( Frame, Utils.LoggerHelper ):
     # Generic node handlers
 
     def createNodeBindings( self ):
-        "Create a set of bindings for nodes."
+        """Create a set of bindings for nodes."""
         bindings = {
             '<ButtonPress-1>': self.clickNode,
             '<B1-Motion>': self.dragNode,
@@ -2618,22 +2776,23 @@ class MiniEdit( Frame, Utils.LoggerHelper ):
         return l
 
     def selectItem( self, item, canvas ):
-        "Select an item and remember old selection."
+        """Select an item and remember old selection."""
         self.lastSelection = self.selection
+        
         self.lastCanvas = self.actualCanvas
         self.selection = item
         self.actualCanvas = canvas
 
     def enterNode( self, event ):
-        "Select node on entry."
+        """Select node on entry."""
         self.selectNode( event )
 
     def leaveNode( self, _event ):
-        "Restore old selection on exit."
+        """Restore old selection on exit."""
         self.selectItem( self.lastSelection, _event.widget.master )
 
     def clickNode( self, event ):
-        "Node click handler."
+        """Node click handler."""
         if event.widget.master.disabled: #parent canvas
             return
         if self.active is 'NetLink':
@@ -2643,14 +2802,14 @@ class MiniEdit( Frame, Utils.LoggerHelper ):
         return 'break'
 
     def dragNode( self, event ):
-        "Node drag handler."
+        """Node drag handler."""
         if self.active is 'NetLink':
             self.dragNetLink( event)
         else:
             self.dragNodeAround( event )
 
     def releaseNode( self, event ):
-        "Node release handler."
+        """Node release handler."""
         if event.widget.master.disabled: #parent canvas
             return
         if self.active is 'NetLink':
@@ -2660,13 +2819,13 @@ class MiniEdit( Frame, Utils.LoggerHelper ):
     # Specific node handlers
 
     def selectNode( self, event ):
-        "Select the node that was clicked on."
+        """Select the node that was clicked on."""
         canvas = event.widget.master
         item = canvas.widgetToItem.get( event.widget, None )
         self.selectItem( item, canvas )
 
     def dragNodeAround( self, event ):
-        "Drag a node around on the canvas."
+        """Drag a node around on the canvas."""
         canvas = event.widget.master
         # Convert global to local coordinates;
         # Necessary since x, y are widget-relative
@@ -2687,22 +2846,23 @@ class MiniEdit( Frame, Utils.LoggerHelper ):
         self.updateScrollRegion(canvas)
 
     def createControlLinkBindings( self, canvas ):
-        "Create a set of bindings for nodes."
+        """Create a set of bindings for nodes."""
         # Link bindings
         # Selection still needs a bit of work overall
         # Callbacks ignore event
 
         def select( _event, link=self.link ):
-            "Select item on mouse entry."
+            """Select item on mouse entry."""
             self.selectItem( link, _event.widget )
 
         def highlight( _event, link=self.link ):
-            "Highlight item on mouse entry."
+            """Highlight item on mouse entry."""
             self.selectItem( link, _event.widget )
             canvas.itemconfig( link, fill='#33ccff' )
 
+        
         def unhighlight( _event, link=self.link ):
-            "Unhighlight item on mouse exit."
+            """Unhighlight item on mouse exit."""
             canvas.itemconfig( link, fill='red' )
             #self.selectItem( None )
 
@@ -2710,6 +2870,7 @@ class MiniEdit( Frame, Utils.LoggerHelper ):
         canvas.tag_bind( self.link, '<Leave>', unhighlight )
         canvas.tag_bind( self.link, '<ButtonPress-1>', select )
 
+    
     def highlight_route(self, route_tag, canvas, color):
         items = canvas.find_withtag(route_tag)
         for item in items:
@@ -2719,6 +2880,7 @@ class MiniEdit( Frame, Utils.LoggerHelper ):
             canvas.links[item]['old_color'] = old_color
             canvas.itemconfig(item, dash = (3,3), fill = color)
 
+    
     def unhighlight_route(self, route_tag, canvas):
         items = canvas.find_withtag(route_tag)
         for item in items:
@@ -2732,18 +2894,18 @@ class MiniEdit( Frame, Utils.LoggerHelper ):
         return TK_COLORS[self.color_index]
 
     def createDataLinkBindings( self, canvas ):
-        "Create a set of bindings for nodes."
+        """Create a set of bindings for nodes."""
         # Link bindings
         # Selection still needs a bit of work overall
         # Callbacks ignore event
         regex = re.compile('route[1-9]*')
 
         def select( _event, link=self.link ):
-            "Select item on mouse entry."
+            """Select item on mouse entry."""
             self.selectItem( link, _event.widget )
 
         def highlight( _event, link=self.link ):
-            "Highlight item on mouse entry."
+            """Highlight item on mouse entry."""
             self.selectItem( link, _event.widget )
             self.color_index = 0
             color = '#33ccff'
@@ -2758,8 +2920,9 @@ class MiniEdit( Frame, Utils.LoggerHelper ):
                 self.highlight_route(route_tag, self.phy_canvas, color)
 
 
+        
         def unhighlight( _event, link=self.link ):
-            "Unhighlight item on mouse exit."
+            """Unhighlight item on mouse exit."""
             route_tags = filter(regex.match, canvas.gettags(link))
             if not route_tags:
                 color = getattr(link, 'old_color', 'blue')
@@ -2777,7 +2940,7 @@ class MiniEdit( Frame, Utils.LoggerHelper ):
         canvas.tag_bind( self.link, '<Button-3>', self.do_linkPopup )
 
     def startLink( self, event ):
-        "Start a new link."
+        """Start a new link."""
         canvas = event.widget.master
         if event.widget not in canvas.widgetToItem:
             # Didn't click on a node
@@ -2792,7 +2955,7 @@ class MiniEdit( Frame, Utils.LoggerHelper ):
         self.linkItem = item
 
     def finishLink( self, event ):
-        "Finish creating a link"
+        """Finish creating a link"""
         if self.link is None:
             return
         source = self.linkWidget
@@ -2855,27 +3018,31 @@ class MiniEdit( Frame, Utils.LoggerHelper ):
 
     # Menu handlers
 
+    
     def createToolImages( self ):
-        "Create toolbar (and icon) images."
+        """Create toolbar (and icon) images."""
 
+    
     def checkIntf( self, intf ):
-        "Make sure intf exists and is not configured."
+        """Make sure intf exists and is not configured."""
         if ( ' %s:' % intf ) not in quietRun( 'ip link show' ):
-            showerror(title="Error",
+            tkMessageBox.showerror(title="Error",
                       message='External interface ' +intf + ' does not exist! Skipping.')
             return False
         ips = re.findall( r'\d+\.\d+\.\d+\.\d+', quietRun( 'ifconfig ' + intf ) )
         if ips:
-            showerror(title="Error",
+            tkMessageBox.showerror(title="Error",
                       message= intf + ' has an IP address and is probably in use! Skipping.' )
             return False
         return True
 
+    
     def updateOptions( self, opts, opt_list, values):
         for opt, opt_type in opt_list:
             if len(values.get(opt, '')) > 0:
                 opts[opt] = opt_type( values.get(opt) )
 
+    
     def hostDetails( self, canvas, _ignore=None ):
         if ( self.selection is None or
              self.net is not None or
@@ -2906,17 +3073,16 @@ class MiniEdit( Frame, Utils.LoggerHelper ):
                      ('local_intf_name', str),
                      ('mem', float),
                      ('cpu', float),
-                     #('defaultRoute', str),
-                     #('ip', str),
-                     #('externalInterfaces', list),
-                     #('vlanInterfaces', list)
+                     ('defaultRoute', str),
+                     ('ip', str),
+                     ('externalInterfaces', list),
+                     ('vlanInterfaces', list)
                      ]
         self.updateOptions(opts, opt_list, hostBox.result)
         opt_list = [ ('mem', float),
                      ('cpu', float),
                      ]
         self.updateOptions(opts['res'], opt_list, hostBox.result)
-        self.updateOptions(opts, opt_list, hostBox.result)
 
         name = opts['hostname']
         widget[ 'text' ] = name
@@ -2931,6 +3097,7 @@ class MiniEdit( Frame, Utils.LoggerHelper ):
         #self.updateGraphNode(name, opts, canvas, self.selection)
         self._debug('New host details for %s = %s'%(name, str(opts)))
 
+    
     def vnfDetails( self, canvas, _ignore=None ):
         if ( self.selection is None or
              self.selection not in canvas.itemToWidget ):
@@ -2965,6 +3132,7 @@ class MiniEdit( Frame, Utils.LoggerHelper ):
                              old_name = old_name)
         self._debug('New VNF details for %s = %s'%(name, str(opts)))
 
+    
     def startpointDetails( self, canvas, _ignore=None ):
         if ( self.selection is None or
              self.selection not in canvas.itemToWidget ):
@@ -2993,6 +3161,7 @@ class MiniEdit( Frame, Utils.LoggerHelper ):
                              old_name=old_name)
         self._debug('New startpoint details for %s = %s' % (name, str(opts)))
 
+    
     def switchDetails( self, canvas,  _ignore=None):
         if ( self.selection is None or
              self.net is not None or
@@ -3008,10 +3177,9 @@ class MiniEdit( Frame, Utils.LoggerHelper ):
         switchBox = SwitchDialog(self, title='Switch Details', prefDefaults=prefDefaults)
         self.master.wait_window(switchBox.top)
         if switchBox.result:
-            newSwitchOpts = {'nodeNum':canvas.switchOpts[name]['nodeNum']}
-            newSwitchOpts['node_type'] = self.TYPE_SWITCH
-            newSwitchOpts['switchType'] = switchBox.result['switchType']
-            newSwitchOpts['controllers'] = canvas.switchOpts[name]['controllers']
+            newSwitchOpts = {'nodeNum': canvas.switchOpts[name]['nodeNum'], 'node_type': self.TYPE_SWITCH,
+                             'switchType': switchBox.result['switchType'],
+                             'controllers': canvas.switchOpts[name]['controllers']}
             if len(switchBox.result['dpctl']) > 0:
                 newSwitchOpts['dpctl'] = switchBox.result['dpctl']
             if len(switchBox.result['dpid']) > 0:
@@ -3095,7 +3263,7 @@ class MiniEdit( Frame, Utils.LoggerHelper ):
 
         ctrlrBox = ControllerDialog(self, title='Controller Details', ctrlrDefaults=canvas.controllers[name])
         if ctrlrBox.result:
-            self._debug('New controller options: %s'%(ctrlrBox.result))
+            self._debug('New controller options: %s'% ctrlrBox.result)
             if len(ctrlrBox.result['hostname']) > 0:
                 name = ctrlrBox.result['hostname']
                 widget[ 'text' ] = name
@@ -3120,6 +3288,7 @@ class MiniEdit( Frame, Utils.LoggerHelper ):
             self.updateGraphNode(name, canvas.controllers[name], canvas, self.selection, old_name = old_name)
 
 
+    
     def listBridge( self, canvas, _ignore=None):
         if ( self.selection is None or
              self.net is None or
@@ -3139,6 +3308,7 @@ class MiniEdit( Frame, Utils.LoggerHelper ):
     def rootTerminal( self, _ignore=None ):
         call(["xterm -T 'Root Terminal' -sb -sl 2000 &"], shell=True)
 
+    
     def startCLI( self, _ignore=None ):
         if self.net is not None:
             cli.CLI(self.net)
@@ -3148,8 +3318,10 @@ class MiniEdit( Frame, Utils.LoggerHelper ):
     # Ultimately we will either want to use a topo or
     # mininet object here, probably.
 
-    def addLink( self, source, dest, canvas, linktype='data', linkopts={} ):
-        "Add link to model."
+    def addLink(self, source, dest, canvas, linktype='data', linkopts=None):
+        """Add link to model."""
+        if not linkopts:
+            linkopts = {}
         source.links[ dest ] = self.link
         dest.links[ source ] = self.link
         canvas.links[ self.link ] = {'type' :linktype,
@@ -3160,7 +3332,7 @@ class MiniEdit( Frame, Utils.LoggerHelper ):
         self.updateGraphEdge(source['text'], dest['text'], canvas.links[self.link], canvas)
 
     def deleteLink( self, link, canvas ):
-        "Delete link from model."
+        """Delete link from model."""
         pair = canvas.links.get( link, None )
         if pair is not None:
             source=pair['src']
@@ -3191,7 +3363,7 @@ class MiniEdit( Frame, Utils.LoggerHelper ):
             del canvas.links[ link ]
 
     def deleteNode( self, item, canvas ):
-        "Delete node (and its links) from model."
+        """Delete node (and its links) from model."""
 
         widget = canvas.itemToWidget[ item ]
         tags = canvas.gettags(item)
@@ -3214,286 +3386,35 @@ class MiniEdit( Frame, Utils.LoggerHelper ):
         del canvas.itemToWidget[ item ]
         del canvas.widgetToItem[ widget ]
 
-    def pathCheck( self, *args, **kwargs ):
-        "Make sure each program in *args can be found in $PATH."
-        moduleName = kwargs.get( 'moduleName', 'it' )
-        for arg in args:
-            if not quietRun( 'which ' + arg ):
-                showerror(title="Error",
-                      message= 'Cannot find required executable %s.\n' % arg +
-                       'Please make sure that %s is installed ' % moduleName +
-                       'and available in your $PATH.' )
+    # Do the actual start physical operation
+    def start_network(self, phy_g, appPrefs):
+        """Start network."""
 
-    def build_topo_network(self, network_topo):
-        app_prefs = self.appPrefs
-        dpctl = app_prefs['dpctl']
-        dpctl = None if not dpctl else int(dpctl)
-        network_topo['netopts'].update({ 'listenPort': dpctl,
-                                      'topo': None,
-                                      'build': False,
-                                      'ipBase': app_prefs['ipBase'],
-                                      'autoSetMacs': True ,
-                                      'autoStaticArp': True
-                                     })
-
-    def build_topo_switch(self, network_topo, name, opts):
-        # Create the correct switch class
-        switchClass = customOvs
-        switchParms={'name': name}
-        if 'dpctl' in opts:
-            switchParms['listenPort']=int(opts['dpctl'])
-        if 'dpid' in opts:
-            switchParms['dpid']=opts['dpid']
-
-        if opts['switchType'] == 'default':
-            sw_type = self.appPrefs['switchType']
-        else:
-            sw_type = opts['switchType']
-
-        switchClass = customOvs
-        if sw_type == 'ivs':
-            switchClass = IVSSwitch
-        elif sw_type == 'user':
-            switchClass = CustomUserSwitch
-        elif sw_type == 'userns':
-            switchParms['inNamespace'] = True
-            switchClass = CustomUserSwitch
-
-        switchParms['cls'] = switchClass
-
-        network_topo['switches'][opts['_id']] = {'params': switchParms}
-
-        ip = opts.get('switchIP', None)
-        if ip: network_topo['switches'][opts['_id']]['ip'] = ip
-
-        if switchClass == customOvs:
-            network_topo['switches'][opts['_id']]['openflowver'] = \
-            self.appPrefs['openFlowVersions']
-
-        network_topo['switches'][opts['_id']]['controllers'] = \
-        opts['controllers']
-
-        nflow = opts.get('netflow', None)
-        if nflow:
-            network_topo['switches'][opts['_id']]['netflow'] = \
-            opts['netflow']
-
-        sflow = opts.get('sflow', None)
-        if nflow:
-            network_topo['switches'][opts['_id']]['sflow'] = \
-            opts['sflow']
-                    # Attach external interfaces
-        if ('externalInterfaces' in opts):
-            network_topo['switches'][opts['_id']]['extintf'] = \
-            opts['externalInterfaces']
-
-    def build_topo_ee(self, network_topo, name, opts):
-        settings = {}
-#         settings['sched'] = 'r'
-
-        ip = opts.get('ip', None)
-        if ip: settings['ip'] = ip
-
-        defaultRoute = opts.get('defaultRoute', None)
-        if defaultRoute: settings['defaultRoute'] = 'via '+defaultRoute
-
-        # Create the correct host class
-        hostCls = EE
-        self._debug("Add %s EE to mininet with parameters %s"%(name, opts))
-        params = {'name': name,
-                  'cls': hostCls,
-                  'cpu': 0.1,
-                  'ee_type': opts.get('ee_type', 'static'),
-                  }
-        for o in ['remote_dpid', 'remote_port', 'remote_conf_ip',
-                  'remote_netconf_port', 'netconf_username',
-                  'netconf_passwd', 'local_intf_name']:
-            params[o] = opts.get(o)
-
-        params.update(settings)
-        network_topo['ee'][opts['_id']]={'params': params}
-
-        if False:
-            # Set the CPULimitedHost specific options
-            if 'cores' in opts:
-                network_topo['ee'][opts['_id']]['cores'] = opts['cores']
-            if 'cpu' in opts:
-                network_topo['ee'][opts['_id']]['frac']={'f':opts['cpu'],
-                                                         'sched':opts['sched']
-                                                         }
-
-        # Attach external interfaces
-        if ('externalInterfaces' in opts):
-            network_topo['ee'][opts['_id']]['extintf'] = \
-            opts['externalInterfaces']
-
-        vlanif = opts.get('vlanInterfaces', None)
-        if vlanif:
-            self._debug('Checking that OS is VLAN prepared')
-            self.pathCheck('vconfig', moduleName='vlan package')
-            moduleDeps( add='8021q' )
-            network_topo['ee'][opts['_id']]['vlanif'] = vlanif
-
-    def build_topo_controller(self, network_topo, name, opts):
-        # Get controller info from panel
-        controllerType = opts['controllerType']
-
-        # Make controller
-        self._info('Getting controller selection: %s'%(controllerType))
-
-        c=Controller
-        if controllerType == 'remote':
-            c=RemoteController
-        elif controllerType == 'inband':
-            c=InbandController
-        elif controllerType == 'ovsc':
-            c=OVSController
-        params = {'name': name,
-                  'ip': opts['remoteIP'],
-                  'port': opts['remotePort'],
-                  'controller': c
-                  }
-        network_topo['controllers'][opts['_id']] = {'params': params}
-
-    def build_topo_sap(self, network_topo, name, opts):
-        settings = {}
-        ip = opts.get('ip', None)
-        if ip: settings['ip'] = ip
-#                     else:
-#                         nodeNum = canvas.startpointOpts[name]['nodeNum']
-#                         settings['nodeNum']= nodeNum
-#                         ipBaseNum, prefixLen = netParse( self.appPrefs['ipBase'] )
-#                         settings['ipBaseNum'] = ipBaseNum
-#                         settings['prefixLen'] = prefixLen
-#                         ip = ipAdd(i=nodeNum, prefixLen=prefixLen, ipBaseNum=ipBaseNum)
-
-        defaultRoute = opts.get('defaultRoute', None)
-        if defaultRoute: settings['defaultRoute'] = 'via '+defaultRoute
-
-#                     Create the correct host class
-        self._debug("Add %s SAP to mininet with parameters %s"%(name, opts))
-        hostCls = Host
-        if 'cores' in opts or 'cpu' in opts:
-            hostCls=CPULimitedHost
-
-        params = {'name': name,
-                  'cls': hostCls
-                  }
-        params.update(settings)
-        network_topo['saps'][opts['_id']]={'params': params}
-
-#                     Set the CPULimitedHost specific options
-        if 'cores' in opts:
-            network_topo['hosts'][opts['_id']]['cores'] = opts['cores']
-        if 'cpu' in opts:
-            network_topo['hosts'][opts['_id']].update({'f':opts['cpu'],
-                                                     'sched':opts['sched']
-                                                     })
-
-#                     Attach external interfaces
-        if ('externalInterfaces' in opts):
-            network_topo['hosts'][opts['_id']]['extintf'] = \
-            opts['externalInterfaces']
-
-        vlanif = opts.get('vlanInterfaces', None)
-        if vlanif:
-            pass
-#                             self._debug('Checking that OS is VLAN prepared')
-#                             self.pathCheck('vconfig', moduleName='vlan package')
-#                             moduleDeps( add='8021q' )
-
-    def build_topo_links(self, network_topo, canvas):
-        self._info("Getting Links.")
-        for key,link in canvas.links.iteritems():
-            tags = canvas.gettags(key)
-            if 'data' in tags:
-                src=link['src']
-                dst=link['dest']
-                linkopts=link['linkOpts']
-                srcName, dstName = src[ 'text' ], dst[ 'text' ]
-                network_topo['links'][(srcName, dstName)]={'node1': srcName,
-                                                   'node2': dstName,
-                                                   'cls': TCLink
-                                                   }
-                network_topo['links'][(srcName, dstName)].update(linkopts)
-                self._debug("Create link between %s : %s with parameters %s"%(src, dst, linkopts))
-
-    def build_topo(self, canvas):
-        self._info("Build network based on our topology.")
-        network_topo = { 'netopts': dict(),
-                         'ee': dict(),
-                         'saps': dict(),
-                         'switches': dict(),
-                         'controllers': dict(),
-                         'links': dict()
-                        }
-
-        self.build_topo_network(network_topo)
-        # Make nodes
-        self._info("Getting Hosts and Switches.")
-
-        for widget in canvas.widgetToItem:
-            name = widget[ 'text' ]
-            tags = canvas.gettags( canvas.widgetToItem[ widget ] )
-
-            if 'Switch' in tags:
-                opts = canvas.switchOpts[name]
-                self.build_topo_switch(network_topo, name, opts)
-
-            elif 'LegacySwitch' in tags:
-                opts = canvas.switchOpts[name]
-                params = {'params':{'name': name,
-                                    'cls': LegacySwitch}
-                          }
-                network_topo['switches'][opts['_id']] = params
-            elif 'LegacyRouter' in tags:
-                opts = canvas.switchOpts[name]
-                params = {'params':{'name': name,
-                                    'cls': LegacyRouter}
-                          }
-                network_topo['hosts'][opts['_id']] = params
-            elif 'Host' in tags:
-                opts = canvas.hostOpts[name]
-                self.build_topo_ee(network_topo, name, opts)
-            elif 'Controller' in tags:
-                opts = canvas.controllers[name]
-                self.build_topo_controller(network_topo, name, opts)
-
-            elif 'Startpoint' in tags:
-                opts = canvas.startpointOpts[name]
-                self.build_topo_sap(network_topo, name, opts)
-            else:
-                raise Exception( "Cannot create mystery node: " + name )
-
-        # Make links
-        self.build_topo_links(network_topo, canvas)
-
-        return network_topo
-
-    def start_network( self, canvas ):
-        "Start network."
+        #dump(self.nf_canvas)
         if not self.network_manager.network_alive():
-            topo = self.build_topo(canvas)
+            self.network_manager.build_topo(phy_g, appPrefs)
             nflow = self.appPrefs['netflow']
             sflow = self.appPrefs['sflow']
             startcli = self.appPrefs['startCLI']
 
-            self.network_manager.start_topo(topo, nflow, sflow, startcli)
+            self.network_manager.start_topo(nflow = nflow, sflow = sflow, startcli = startcli)
             self.net = self.network_manager.net
             self.node_manager.set_mininet(self.network_manager.net)
 
+    # Do the actual stop physical operation
     def stop_network( self ):
-        "Stop network."
+        """Stop network."""
         self._info('Stop network')
+        self.node_manager.stop()
         if self.network_manager.network_alive():
             self.network_manager.stop_network()
-        self.node_manager.stop()
+        # self.node_manager.stop()
         cleanUpScreens()
         self.net = None
 
     def do_linkPopup(self, event):
         # display the popup menu
-        if ( self.net is None ):
+        if self.net is None:
             try:
                 self.linkPopup.canvas = event.widget
                 self.linkPopup.tk_popup(event.x_root, event.y_root, 0)
@@ -3510,7 +3431,7 @@ class MiniEdit( Frame, Utils.LoggerHelper ):
 
     def do_controllerPopup(self, event):
         # display the popup menu
-        if ( self.net is None ):
+        if self.net is None:
             try:
                 self.controllerPopup.canvas = event.widget.master
                 self.controllerPopup.tk_popup(event.x_root, event.y_root, 0)
@@ -3520,7 +3441,7 @@ class MiniEdit( Frame, Utils.LoggerHelper ):
 
     def do_legacyRouterPopup(self, event):
         # display the popup menu
-        if ( self.net is not None ):
+        if self.net is not None:
             try:
                 self.legacyRouterRunPopup.canvas = event.widget.master
                 self.legacyRouterRunPopup.tk_popup(event.x_root, event.y_root, 0)
@@ -3530,7 +3451,7 @@ class MiniEdit( Frame, Utils.LoggerHelper ):
 
     def do_hostPopup(self, event):
         # display the popup menu
-        if ( self.net is None ):
+        if self.net is None:
             try:
                 self.hostPopup.canvas = event.widget.master
                 self.hostPopup.tk_popup(event.x_root, event.y_root, 0)
@@ -3547,7 +3468,7 @@ class MiniEdit( Frame, Utils.LoggerHelper ):
 
     def do_startpointPopup(self, event):
         # display the popup menu
-        if ( not event.widget.master.disabled ): #parent canvas enabled
+        if not event.widget.master.disabled: #parent canvas enabled
             try:
                 self.startpointPopup.canvas = event.widget.master
                 self.startpointPopup.tk_popup(event.x_root, event.y_root, 0)
@@ -3564,7 +3485,7 @@ class MiniEdit( Frame, Utils.LoggerHelper ):
 
     def do_vnfPopup(self, event):
         # display the popup menu
-        if ( not event.widget.master.disabled ): #parent canvas enabled
+        if not event.widget.master.disabled: #parent canvas enabled
             try:
                 self.vnfPopup.canvas = event.widget.master
                 self.vnfPopup.tk_popup(event.x_root, event.y_root, 0)
@@ -3581,7 +3502,7 @@ class MiniEdit( Frame, Utils.LoggerHelper ):
 
     def do_legacySwitchPopup(self, event):
         # display the popup menu
-        if ( self.net is not None ):
+        if self.net is not None:
             self.switchRunPopup.canvas = event.widget.master
             try:
                 self.switchRunPopup.tk_popup(event.x_root, event.y_root, 0)
@@ -3591,7 +3512,7 @@ class MiniEdit( Frame, Utils.LoggerHelper ):
 
     def do_switchPopup(self, event):
         # display the popup menu
-        if ( self.net is None ):
+        if self.net is None:
             try:
                 self.switchPopup.canvas = event.widget.master
                 self.switchPopup.tk_popup(event.x_root, event.y_root, 0)
@@ -3615,18 +3536,32 @@ class MiniEdit( Frame, Utils.LoggerHelper ):
         try:
             name = w.parent_vnf
         except AttributeError:
-            showerror(title="Error",
+            tkMessageBox.showerror(title="Error",
                       message="This EE does not run a click instance")
             return
-        self._info("Open clickgui on node %s"%(name))
+        self._info("Open clickgui on node %s"% name)
         node = self.net.nameToNode[ name ]
         vnf_name = w['text']
 
-        self.network_manager.start_clicky(vnf_name)
+        # start clicky directly for VNFs running on netconf node
+        container = self.phy_g.node.get(name, {})
+        type = container.get('node_type')
+        ee_type = container.get('ee_type')
+        if type == self.TYPE_HOST and ee_type in ['netconf']:
+            from mininet.clickgui import defaultCcssFile
+            vnf_options = self.network_manager.vnf_manager.vnf_options.get(vnf_name)
+            vnf_control_port = vnf_options['vnf_control_port']
+            vnf_control_ip = '127.0.0.1'
+            ccssfile = defaultCcssFile()
+            call(['clicky -s ' + ccssfile + ' -p '+ vnf_control_ip + ':' + 
+                  vnf_control_port + ' &'], shell=True )
+        else:
+            self.network_manager.start_clicky(vnf_name)
 
+    
     def xterm( self, canvas, _ignore=None ):
 
-        "Make an xterm when a button is pressed."
+        """Make an xterm when a button is pressed."""
         if ( self.selection is None or
              self.net is None or
              self.selection not in canvas.itemToWidget ):
@@ -3635,15 +3570,16 @@ class MiniEdit( Frame, Utils.LoggerHelper ):
         name = w[ 'text' ]
         if name not in self.net.nameToNode:
             return
-        self._info("Start xterm on node %s"%(name))
+        self._info("Start xterm on node %s"% name)
         term = makeTerm( self.net.nameToNode[ name ], 'Host', term=self.appPrefs['terminalType'] )
         if StrictVersion(VERSION) > StrictVersion('2.0'):
             self.net.terms += term
         else:
             self.net.terms.append(term)
 
-    def iperf( self, _ignore=None ):
-        "Make an xterm when a button is pressed."
+    
+    def iperf( self, canvas, _ignore=None ):
+        """Make an xterm when a button is pressed."""
         if ( self.selection is None or
              self.net is None or
              self.selection not in canvas.itemToWidget ):
@@ -3655,11 +3591,13 @@ class MiniEdit( Frame, Utils.LoggerHelper ):
 
     """ BELOW HERE IS THE TOPOLOGY IMPORT CODE """
 
+    
     def refreshPhyGui(self, canvas):
         # Get host infos
         if self.net is None:
             return
 
+        
         self.mem_total = float( quietRun( self.vnf_mcmd ).split()[-2] )
         for widget in canvas.widgetToItem:
             name = widget[ 'text' ]
@@ -3684,8 +3622,8 @@ class MiniEdit( Frame, Utils.LoggerHelper ):
                 mininet_host.mem_usage_abs = float(mem_usage)/self.mem_total
 
                 #update info fields
-                upper_text = 'IP:%s'%(ip) + '\n' + 'CPU: %3.1f%%'%(100*mininet_host.cpu_usage_rel)
-                lower_text = 'MAC:%s'%(mac) + '\n' + 'MEM: %3.1f%%'%(100*mininet_host.mem_usage_abs)
+                upper_text = 'IP:%s'% ip + '\n' + 'CPU: %3.1f%%'%(100*mininet_host.cpu_usage_rel)
+                lower_text = 'MAC:%s'% mac + '\n' + 'MEM: %3.1f%%'%(100*mininet_host.mem_usage_abs)
                 if getattr(widget, 'upper_info', None):
                     canvas.itemconfig(widget.upper_info, text = upper_text)
                 else:
@@ -3706,7 +3644,7 @@ class MiniEdit( Frame, Utils.LoggerHelper ):
 
     def updateGraphNode(self, name, options, canvas, canvas_id, old_name = None):
         self._debug("Update node list with node: %s in graph %s"%(name, canvas.unifyType))
-        self._debug("Parameter list is %s"%(options))
+        self._debug("Parameter list is %s"% options)
 
         if canvas.unifyType == 'NF':
             if options['node_type'] == 'VNF':
@@ -3739,7 +3677,7 @@ class MiniEdit( Frame, Utils.LoggerHelper ):
                 options.update(**options['linkOpts'])
                 del options['linkOpts']
 
-        self._debug("Parameter list %s"%(options))
+        self._debug("Parameter list %s"% options)
         if canvas.unifyType == 'NF':
             self.nf_g.add_edge(source, target, attr_dict=options)
         elif canvas.unifyType == 'PHY':
@@ -3766,18 +3704,21 @@ class MiniEdit( Frame, Utils.LoggerHelper ):
         else:
             raise Exception( "Unknown canvas type: " + canvas.unifyType )
 
+    
     def fatal_error_handler(self, _type, _value, _traceback):
         print traceback.print_exception(_type, _value, _traceback)
         error = "%s: %s"%(_type, _value)
         print error
         exit(-1)
 
+    
     def gui_error_handler(self, _type, _value, _traceback):
         print traceback.print_exception(_type, _value, _traceback)
         lines = traceback.format_exception_only(_type, _value)
         msg = '\n'.join(lines)
         tkMessageBox.showerror("Critical exception", msg)
         #TODO: clean and safe quit, kill all daemon thread, etc
+        
         os._exit(-1)
 
     def _gui_warn(self, msg):
@@ -3785,7 +3726,7 @@ class MiniEdit( Frame, Utils.LoggerHelper ):
         self._warning(msg)
 
 def miniEditImages():
-    "Create and return images for MiniEdit."
+    """Create and return images for MiniEdit."""
 
     # Image data. Git will be unhappy. However, the alternative
     # is to keep track of separate binary files, which is also
@@ -3807,12 +3748,14 @@ def miniEditImages():
         'Startpoint': image_resource('entrance.png')
     }
 
+
 def _main():
     if os.getuid() != 0:
         print "ESCAPE must run as root because of MiniNet"
         return
     logger = logging.getLogger(__name__)
 
+    # POX running thread with init modules
     pox_thread = threading.Thread(target = boot.boot,
                                   name = 'POXThread',
                                   args = (["--handle_signals=False",
@@ -3825,13 +3768,17 @@ def _main():
                                            "simple_topology",
                                            "etc_hosts",
                                            ],))
+    # Demonize
     pox_thread.daemon = True
 
+    # Set worker thread
     worker = Utils.Worker()
     worker_thread = threading.Thread(target = worker.work,
                                      name = 'WorkerThread')
     worker_thread.daemon = True
 
+    # Start POX and wait for the ready notification from pox.core
+    # fired by CoreInitListener module
     CoreInitListener.condition.acquire()
     worker_thread.start()
     pox_thread.start()
@@ -3844,20 +3791,24 @@ def _main():
     logging.getLogger().setLevel(logging.DEBUG)
 
     logger.debug('Remove logHandler defined in pox')
-    logging.getLogger().removeHandler(core._default_log_handler)
+    
+    logging.getLogger().removeHandler(pox.core._default_log_handler)
 
     pox.core.core.callLater(pox.core.core.NetworkManagerMininet.addListeners,
                             pox.core.core.TrafficSteering)
-
-
+							
+    # Init main GUI window
     app = MiniEdit(worker)
     if params.nf_topo:
         app.loadNFTopology(params.nf_topo)
+    
     if params.phy_topo:
         app.loadPHYTopology(params.phy_topo)
+    # Start GUI event handling loop
     app.mainloop()
 
 params = None
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description = "ESCAPE: Extensible Service \
                                                    ChAin Prototyping \

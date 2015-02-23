@@ -96,7 +96,7 @@ from itertools import chain
 from cli import CLI
 from log import info, error, debug, output
 from node import Host, OVSKernelSwitch, Controller
-from node import EE, NetconfAgent, RemoteSwitch
+from node import EE, NetconfAgent, RemoteSwitch, Node
 from link import Link, Intf
 from util import quietRun, fixLimits, numCores, ensureRoot
 from util import macColonHex, ipStr, ipParse, netParse, ipAdd
@@ -404,7 +404,7 @@ class Mininet( object ):
         info( 'Starting' )
         for ee in self.ees:
             info( ' ' + ee.name )
-            ee.start()
+            ee.startVNF()
         info( '\n' )
 
     def stopVNFs( self ):
@@ -412,7 +412,7 @@ class Mininet( object ):
         info( 'Stopping' )
         for ee in self.ees:
             info( ' ' + ee.name )
-            ee.stop()
+            ee.stopVNF()
         info( '\n' )
 
     def restartVNFs( self ):
@@ -420,7 +420,7 @@ class Mininet( object ):
         info( 'Restarting' )
         for ee in self.ees:
             info( ' ' + ee.name )
-            ee.restart()
+            ee.restartVNF()
         info( '\n' )
 
     def configAgents( self ):
@@ -606,6 +606,7 @@ class Mininet( object ):
         for agt in self.agents:
             info( agt.name + ' ' )
             agt.stop()
+        NetconfAgent.init()
         info( '\n' )
         info( '*** Stopping %i hosts\n' % len( self.hosts ) )
         for host in self.hosts:
@@ -616,14 +617,16 @@ class Mininet( object ):
             info( '*** Stopping %i VNFs\n' % len( self.ees ) )
         for ee in self.ees:
             info( ee.name + ' ' )
+            ee.stopVNF()
             ee.stop()
-            ee.terminate()
         info( '\n' )
         info( '*** Stopping %i controllers\n' % len( self.controllers ) )
         for controller in self.controllers:
             info( controller.name + ' ' )
             controller.stop()
         info( '\n*** Done\n' )
+        # Reset Node class variables
+        Node.init()
 
     def run( self, test, *args, **kwargs ):
         "Perform a complete start/test/stop cycle."

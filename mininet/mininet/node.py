@@ -110,6 +110,12 @@ class Node( object ):
         node = cls.outToNode.get( fd )
         return node or cls.inToNode.get( fd )
 
+    @classmethod
+    def init( cls ):
+        """Reset class variables in case of net restart."""
+        Node.inToNode = {}
+        Node.outToNode = {}
+
     # Command support via shell process in namespace
 
     def startShell( self ):
@@ -761,7 +767,7 @@ class EE( CPULimitedHost ):
 
         self.startCmd = Catalog().make_cmd(vnf_name, **kw)
 
-    def start ( self ):
+    def startVNF ( self ):
         "Start VNF."
         try:
             self.cmd( self.startCmd )
@@ -769,19 +775,19 @@ class EE( CPULimitedHost ):
             info( "can't start %s" % self.name )
         self.vnfPid = self.lastPid
 
-    def stop ( self, sig=signal.SIGINT ):
+    def stopVNF ( self, sig=signal.SIGINT ):
         "Interrupt running VNF."
         if getattr(self, 'vnfPid', None) and self.vnfPid:
             try:
                 os.kill( self.vnfPid, sig )
-                self.vnfpid=0
+                self.vnfPid=0
             except OSError:
                 pass
 
-    def restart ( self ):
+    def restartVNF ( self ):
         "Restart the VNF."
-        self.stop()
-        self.start()
+        self.stopVNF()
+        self.startVNF()
 
 # Some important things to note:
 #
@@ -1122,6 +1128,7 @@ class OVSSwitch( Switch ):
         if self.datapath == 'user':
             self.cmd( 'ip link del', self )
         self.deleteIntfs()
+        Node.stop( self )
 
 OVSKernelSwitch = OVSSwitch
 
@@ -1230,6 +1237,8 @@ class Agent( Node ):
         "Is the agent connected to a management system?"
         return False and self  # satisfy pylint
 
+    def stop( self ):
+        Node.stop( self )
 
 class NetconfAgent( Agent ):
     """A NetconfAgent is a management agent communicating the
@@ -1294,6 +1303,11 @@ class NetconfAgent( Agent ):
         "Ensure any dependencies are loaded; if not, try to load them."
         pass
         ## TODO
+
+    @classmethod
+    def init( cls ):
+        NetconfAgent.nextPort = 830
+        NetconfAgent.nextMinPort = 8001
 
     def yangcli( self, *args ):
         """Communication interface to the NETCONF agent,
@@ -1383,8 +1397,12 @@ class NetconfAgent( Agent ):
             try:
                 os.kill(self.agentPid, sig)
                 self.agentPid = None
+                self.cmd('rm -f /tmp/ncxserver_%s.sock' % self.agentPort)
+                self.terminate()
             except OSError:
                 pass
+        # Agent.stop(self)
+            
 
 class Controller( Node ):
     """A Controller is a Node that is running (or has execed?) an
@@ -1435,7 +1453,8 @@ class Controller( Node ):
     def stop( self ):
         "Stop controller."
         self.cmd( 'kill %' + self.command )
-        self.terminate()
+        # kill shell process as well
+        Node.stop( self )
 
     def IP( self, intf=None ):
         "Return IP address of the Controller"
@@ -1502,6 +1521,8 @@ class RemoteController( Controller ):
 
     def stop( self ):
         "Overridden to do nothing."
+        # except killing the corresponding shell process
+        Node.stop( self )
         return
 
     def checkListening( self ):

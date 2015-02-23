@@ -120,6 +120,7 @@ sudo /etc/init.d/ssh restart
 cd "$DIR/Unify_ncagent/vnf_starter"
 mkdir -p bin
 mkdir -p lib
+sudo cp vnf_starter.yang /usr/share/yuma/modules/
 make
 sudo make install
 make clean
@@ -181,5 +182,5 @@ chmod u+x ~/bin/fbautostart
 ## Restore disk space, remove sensitive files, etc.
 ##
 sudo rm -f /etc/udev/rules.d/70-persistent-net.rules
-~/mininet/util/install.sh -d
+$DIR/mininet/util/install.sh -d
 sudo rm -f /tmp/zero

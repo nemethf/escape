@@ -3,7 +3,7 @@
         {
             "opts": {
                 "_id": "c1",
-                "canvas_id": 1,
+                "canvas_id": 20,
                 "controllerType": "remote",
                 "hostname": "c0",
                 "node_type": "C",
@@ -16,29 +16,15 @@
     ],
     "hosts": [
         {
-            "number": "2",
-            "opts": {
-                "_id": "h2",
-                "canvas_id": 4,
-                "hostname": "Container5",
-                "nodeNum": 2,
-                "node_type": "HOST",
-                "res": {
-                    "cpu": 0.9,
-                    "mem": 0.3
-                }
-            },
-            "x": "712.0",
-            "y": "206.0"
-        },
-        {
             "number": "1",
             "opts": {
                 "_id": "h1",
-                "canvas_id": 2,
-                "ee_type": "static",
-                "hostname": "Container3",
+                "canvas_id": 22,
+                "cpu": 0.9,
+                "ee_type": "netconf",
+                "hostname": "nc4",
                 "local_intf_name": "veth0",
+                "mem": 0.3,
                 "netconf_passwd": "jelszo",
                 "netconf_username": "felhasznalonev",
                 "nodeNum": 1,
@@ -49,8 +35,8 @@
                 "remote_netconf_port": 830,
                 "remote_port": 2,
                 "res": {
-                    "cpu": 1.0,
-                    "mem": 1.0
+                    "cpu": 0.9,
+                    "mem": 0.3
                 },
                 "sched": "host"
             },
@@ -61,17 +47,48 @@
             "number": "5",
             "opts": {
                 "_id": "h5",
-                "canvas_id": 3,
-                "hostname": "Container4",
+                "canvas_id": 23,
+                "cpu": 1.0,
+                "ee_type": "remote",
+                "hostname": "9",
+                "local_intf_name": "eth2",
+                "mem": 1.0,
+                "netconf_passwd": "1fy4ever",
+                "netconf_username": "admin",
                 "nodeNum": 5,
+                "node_type": "HOST",
+                "remote_conf_ip": "30.0.0.1",
+                "remote_dpid": "9",
+                "remote_netconf_port": 1830,
+                "remote_port": 1,
+                "res": {
+                    "cpu": 1.0,
+                    "mem": 1.0
+                },
+                "sched": "host"
+            },
+            "x": "640.0",
+            "y": "332.0"
+        },
+        {
+            "number": "2",
+            "opts": {
+                "_id": "h2",
+                "canvas_id": 21,
+                "cpu": 0.2,
+                "ee_type": "netconf",
+                "hostname": "nc7",
+                "mem": 1.0,
+                "nodeNum": 2,
                 "node_type": "HOST",
                 "res": {
                     "cpu": 0.2,
                     "mem": 1.0
-                }
+                },
+                "sched": "host"
             },
-            "x": "640.0",
-            "y": "332.0"
+            "x": "506.0",
+            "y": "335.0"
         }
     ],
     "links": [
@@ -83,7 +100,7 @@
             "src": "sap1"
         },
         {
-            "dest": "Container3",
+            "dest": "nc4",
             "opts": {
                 "delay": 2.0
             },
@@ -112,14 +129,14 @@
             "src": "s3"
         },
         {
-            "dest": "Container5",
+            "dest": "nc7",
             "opts": {
                 "delay": 1.0
             },
             "src": "s3"
         },
         {
-            "dest": "Container4",
+            "dest": "9",
             "opts": {
                 "delay": 5.0
             },
@@ -128,28 +145,28 @@
     ],
     "startpoints": [
         {
-            "number": "3",
-            "opts": {
-                "_id": "sap1",
-                "canvas_id": 6,
-                "name": "sap1",
-                "nodeNum": 3,
-                "node_type": "SAP"
-            },
-            "x": "123.0",
-            "y": "111.0"
-        },
-        {
             "number": "4",
             "opts": {
                 "_id": "sap2",
-                "canvas_id": 5,
+                "canvas_id": 24,
                 "name": "sap2",
                 "nodeNum": 4,
                 "node_type": "SAP"
             },
             "x": "584.0",
             "y": "119.0"
+        },
+        {
+            "number": "3",
+            "opts": {
+                "_id": "sap1",
+                "canvas_id": 25,
+                "name": "sap1",
+                "nodeNum": 3,
+                "node_type": "SAP"
+            },
+            "x": "123.0",
+            "y": "111.0"
         }
     ],
     "switches": [
@@ -157,7 +174,7 @@
             "number": "3",
             "opts": {
                 "_id": "s3",
-                "canvas_id": 9,
+                "canvas_id": 26,
                 "controllers": [
                     "c0"
                 ],
@@ -173,29 +190,10 @@
             "y": "202.0"
         },
         {
-            "number": "1",
-            "opts": {
-                "_id": "s1",
-                "canvas_id": 7,
-                "controllers": [
-                    "c0"
-                ],
-                "hostname": "s1",
-                "netflow": "0",
-                "nodeNum": 1,
-                "node_type": "SW",
-                "sflow": "0",
-                "switchIP": "",
-                "switchType": "ovs"
-            },
-            "x": "205.0",
-            "y": "203.0"
-        },
-        {
             "number": "2",
             "opts": {
                 "_id": "s2",
-                "canvas_id": 11,
+                "canvas_id": 30,
                 "controllers": [
                     "c0"
                 ],
@@ -209,6 +207,25 @@
             },
             "x": "375.0",
             "y": "196.0"
+        },
+        {
+            "number": "1",
+            "opts": {
+                "_id": "s1",
+                "canvas_id": 28,
+                "controllers": [
+                    "c0"
+                ],
+                "hostname": "s1",
+                "netflow": "0",
+                "nodeNum": 1,
+                "node_type": "SW",
+                "sflow": "0",
+                "switchIP": "",
+                "switchType": "ovs"
+            },
+            "x": "205.0",
+            "y": "203.0"
         }
     ],
     "version": "2",

@@ -10,4 +10,13 @@ PYTHONPATH=$PYTHONPATH:$DIR/orchestrator
 PYTHONPATH=$PYTHONPATH:$DIR/Unify_ncclient
 export PYTHONPATH
 
+killall netconfd controller click
+rm -f /tmp/ncxserver*
+mn -c
+for i in {1..30}; do ip link del uny_$i; done
+
+#python gui-demo.py --nf-topo nf-comp-decomp-op.mn --phy-topo phy-4netconf.mn
+#python gui-demo.py --nf-topo review-ewsdn-nf.mn --phy-topo phy-3netconf.mn
+#python gui-demo.py --nf-topo review-ewsdn-nf.mn --phy-topo review-ewsdn-phy.mn
+#python gui-demo.py --nf-topo review-ewsdn-nf.mn --phy-topo review-sigcomm1-phy.mn
 python gui-demo.py

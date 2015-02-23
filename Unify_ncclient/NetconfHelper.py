@@ -266,9 +266,23 @@ class NetconfHelper:
         #rpc_reply = with .xml we convert it to xml-string
         try:
             rpc_reply = self.__connection.dispatch(rpc).xml
-        except (ncclient.operations.rpc.RPCError,
-                ncclient.transport.TransportError) as e:
+        except (ncclient.operations.rpc.RPCError) as e:
+            self.__logger.info("ncclient: RPCError: %s" % e)
             raise RPCError(e)
+            return None
+        except (ncclient.transport.TransportError) as e:
+            self.__logger.info("ncclient: TransportError % s" % e)
+            #self.connect()
+            raise RPCError(e)
+            return None
+        except (ncclient.operations.rpc.OperationError) as e:
+            self.__logger.info("ncclient: OperationError: %s" % e)
+            # self.__logger.info("function (connect)Connected: %s" 
+            #                    % self.__connection.connected)
+            # self.connect()
+            raise RPCError(e)
+            return None
+
         
         #we set our global variable's value to this xml-string
         #therefore, last RPC will always be accessible

@@ -1,5 +1,6 @@
 *~
 *.pyc
+*.cache
 
 #Compiled Object Files
 *.o

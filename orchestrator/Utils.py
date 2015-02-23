@@ -10,11 +10,11 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
 # General Public License for more details.
 
-'''
+"""
 Created on Jul 18, 2014
 
 @author: csoma
-'''
+"""
 import Queue
 import logging
 import re
@@ -23,10 +23,15 @@ import sys
 
 class Store:
     """Dummy class with __dict__ attribute, to store arbitrary value"""
+
+    def __init__(self):
+        pass
+
     pass
 
 
 class LoggerHelper(object):
+    """Simple logger class"""
 
     def _getLogger(self):
         try:
@@ -59,16 +64,16 @@ class LoggerHelper(object):
     def _exception(self, msg, *args, **kwargs):
         self._getLogger().exception(msg, *args, **kwargs)
 
-class Worker(LoggerHelper):
 
+class Worker(LoggerHelper):
     def __init__(self):
         self.jobs = Queue.Queue()
         self.error_handler = None
 
     def work(self):
         while True:
-            (func, arg, kw) = self.jobs.get(block = True)
-            self._debug('Run %s func with %s %s'%(func, arg, kw))
+            (func, arg, kw) = self.jobs.get(block=True)
+            self._debug('Run %s func with %s %s' % (func, arg, kw))
             try:
                 func(*arg, **kw)
             except:
@@ -79,11 +84,11 @@ class Worker(LoggerHelper):
                     raise
 
     def schedule(self, func, *arg, **kw):
-        self._debug('schedule %s with parameters %s %s'%(func, arg, kw))
-        self.jobs.put((func, arg, kw), block = False)
+        self._debug('schedule %s with parameters %s %s' % (func, arg, kw))
+        self.jobs.put((func, arg, kw), block=False)
+
 
 class GenericEventNotifyer(object):
-
     L = '_handle_'
     F = '_fire_'
 
@@ -93,8 +98,10 @@ class GenericEventNotifyer(object):
 
     def register_listener(self, obj, *args, **kwargs):
         registered = list()
+        # Filter methods which started with "_handle_"
         methods = filter(self.regex.match, dir(obj))
         for method in methods:
+            # Get event name from function name
             event = method[len(GenericEventNotifyer.L):]
             callback = getattr(obj, method)
             self.register_listener_function(event, callback,
@@ -102,8 +109,6 @@ class GenericEventNotifyer(object):
             registered.append(event)
 
         return registered
-
-
 
     def register_listener_function(self, event, callback, *args, **kwargs):
         fire_event = getattr(self, GenericEventNotifyer.F + event, None)
@@ -116,16 +121,33 @@ class GenericEventNotifyer(object):
             self.event_listeners[event] = listeners
         listeners.append((callback, args, kwargs))
 
-
-
     def fire(self, event_name, event):
-        listeners = None
         try:
             listeners = self.event_listeners[event_name]
+            for listener, args, kwargs in listeners:
+                listener(event, *args, **kwargs)
         except KeyError:
-            #0 registered listener to this event
+            # 0 registered listener to this event
             return
 
-        for listener, args, kwargs in listeners:
-            listener(event, *args, **kwargs)
 
+def dump(obj, level=0):
+    """
+    For debugging purposes
+    Print object structure recursively
+    """
+    import types
+    from pprint import pprint
+
+    print "--------DEBUG-------- (%s)  %s\n" % ('', type(obj))
+
+    if isinstance(obj, dict):
+        pprint(obj)
+    else:
+        for key, value in obj.__dict__.items():
+            if not isinstance(value, types.InstanceType):
+                print " " * level + "%s ->" % key
+                pprint(value)
+            else:
+                dump(value, level + 2)
+    print "--------DEBUG--------"

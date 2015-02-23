@@ -10,17 +10,17 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
 # General Public License for more details.
 
-'''
+"""
 Created on Jul 1, 2014
 
 @author: csoma
-'''
+"""
 import copy
 from mininet.vnfcatalog import Catalog
 from Utils import Store
 
-class VNFClickBuilder():
 
+class VNFClickBuilder():
     def __init__(self):
         self.catalog = Catalog()
 
@@ -28,13 +28,15 @@ class VNFClickBuilder():
         options = copy.deepcopy(opts)
         host_name = getattr(host, 'name', None)
         if host_name is None:
-            raise RuntimeError("Unsupported host type: %s"%type(host))
+            raise RuntimeError("Unsupported host type: %s" % type(host))
         vnf = Store()
         del options['name']
         vnf.startCmd = self.catalog.make_cmd(options['function'],
-                                             name = host_name,
+                                             name=host_name,
                                              **options)
         return vnf
 
+
 class VNFDummyBuilder():
-    pass
+    def __init__(self):
+        pass

@@ -19,33 +19,30 @@ Created on May 29, 2014
 
 import networkx as nx
 import logging
-import threading
-import re
-import pox.lib
 import Utils
+import time
 
-from subprocess import call
 from traffic_steering import RouteHop, RouteChanged
 from networkx.readwrite import json_graph
 from pox import core
 from pox import boot
-from pox.lib.revent.revent import EventMixin, Event
 from mininet import clickgui
-from mininet.net import Mininet
-from mininet.cli import CLI
 from mininet.vnfcatalog import Catalog
 
 import VNFBuilders
-from Utils import LoggerHelper
 from NetconfHelper import NetconfHelper, RPCError
 from ncclient.transport import AuthenticationError
 
+
 class DefaultSorter(object):
+    """
+    Helper class for mapping operation
+    """
     def order_vnf_list(self, vnf_list, chain_graph):
         req = dict()
         for vnf in vnf_list:
             req[vnf] = chain_graph.node[vnf]['req']
-        def f(_id): return (req[_id]['cpu'], req[_id]['mem'])
+        def f(_id): return req[_id]['cpu'], req[_id]['mem']
 
         return [vnf_list[x] for x in sorted(req, key = f, reverse = True)]
 
@@ -65,8 +62,11 @@ class DefaultSorter(object):
 
         return chosen_node_id
 
-class NetworkGraphManager(object):
 
+class NetworkGraphManager(object):
+    """
+    Some kind of front end to handle service and physical graphs collectively
+    """
     log = logging.getLogger(__name__)
 
     NODE_TYPE_SAP = "SAP"
@@ -75,7 +75,7 @@ class NetworkGraphManager(object):
     NODE_TYPE_SWITCH = "SW"
     NODE_TYPE_CONTROLLER = "C"
 
-    def __init__(self, auto_id = False, views = ['CHAIN', 'PHY'],
+    def __init__(self, auto_id = False, views = ('CHAIN', 'PHY'),
                  algorithm = DefaultSorter, **config):
 
         self.log = NetworkGraphManager.log
@@ -141,7 +141,7 @@ class NetworkGraphManager(object):
         self.add_link(source, target, view, **link_params)
 
     def add_new_chain(self, start_sap_id=None, end_sap_id=None,
-                      start_sap_opts = dict(), end_sap_opts = dict()):
+                      start_sap_opts = None, end_sap_opts = None):
         """Create and register a new chain with given service attachment points. """
         chain_view = self.config["chain_view"]
 
@@ -159,17 +159,21 @@ class NetworkGraphManager(object):
 
         self.chains[chain_id] = {"source": start, "target": end}
 
-        return (chain_id, start, end)
+        return chain_id, start, end
 
     def get_graph(self, view):
-        return self.graphs[view];
+        return self.graphs[view]
 
     def _next_node_id(self, view):
         node_id = self.status[view].id_counter
         self.status[view].id_counter += 1
         return view + str(node_id)
 
+
 class Mapping(object):
+    """
+    Main class for the mapping process
+    """
     logger = logging.getLogger(__name__)
 
     @staticmethod
@@ -194,7 +198,7 @@ class Mapping(object):
             if not host_node:
                 Mapping.logger.warn('Can not find host node for %s'%vnf.node_id)
                 raise RuntimeError('Can not find host node for %s'%vnf.node_id)
-                continue #can not find enough resource. #TODO: now what?
+                #continue #can not find enough resource. #TODO: now what?
 
             Mapping.add_vnf_to_host(vnf.node_id, host_node, chain_graph, res_graph)
             bindings.append((vnf.node_id, host_node))
@@ -250,12 +254,20 @@ class Mapping(object):
 
 
 class VnfWrapper(Utils.LoggerHelper):
+    """
+    Wrapper class for the VNF elements
+        - Start
+        - Stop
+        - Get info
+        - Using netconf_helper for NETCONF communication
+    """
     def __init__(self, node):
         self.node = node
-        self.name  = self.node.name
+        self.name = self.node.name
         self.mac = self.node.MAC()
         self.netconf_helper = None
         self.id_to_name = {}
+        self.vnfs_status = {}
 
     def start(self, vnf, vnf_options = None):
         self._debug('Start vnf %s on node %s'%(vnf, self.name))
@@ -263,10 +275,10 @@ class VnfWrapper(Utils.LoggerHelper):
             agent = self.node.getAgent()
         except AttributeError:
             agent = None
-        if agent == None:
+        if agent is None:
             # vnf runs on a mininet host
             self.node.startCmd = vnf.startCmd
-            self.node.start()
+            self.node.startVNF()
             # there is no internal vnf_id, no netconf agent
             # so, use pid as a vnf_id
             return self.node.vnfPid
@@ -279,16 +291,35 @@ class VnfWrapper(Utils.LoggerHelper):
                                      #options = vnf_options['custom_params'])
         vnf_id = initVNF['access_info']['vnf_id']
         vnf_options['vnf_control_port'] = initVNF['access_info']['control_port']
-        connectVNF = netconf_helper.rpc("connectVNF",
-                                        vnf_id = vnf_id,
-                                        vnf_port = "0",
-                                        switch_id = self.name)
+        self.id_to_name[vnf_id] = vnf_options['name']
+        self.vnfs_status[vnf_id] = 'INITIALIZING'
+        # Waiting only for remote agents
+        try:
+            remote_conf_ip = agent.params['remote_conf_ip']
+        except KeyError:
+            remote_conf_ip = None
+        if remote_conf_ip is not None:
+            # remote netconf
+            while True: 
+                if self.vnfs_status[vnf_id] == 'UP_AND_RUNNING':
+                    connectVNF = netconf_helper.rpc("connectVNF",
+                                                    vnf_id = vnf_id,
+                                                    vnf_port = "0",
+                                                    switch_id = self.name)
+                    break
+                else:
+                    time.sleep(1)
+        else:
+            # local netconf
+            connectVNF = netconf_helper.rpc("connectVNF",
+                                            vnf_id = vnf_id,
+                                            vnf_port = "0",
+                                            switch_id = self.name)
         netconf_helper.rpc("startVNF",
                            vnf_id = vnf_id)
         # return internal vnf_id administered by netconf agent
         self._info('Started vnf %s by netconf agent on node %s'
                     % (vnf_id, self.name))
-        self.id_to_name[vnf_id] = vnf_options['name']
         return vnf_id
         # self._error("can't start VNF on node (%s)" % self.name)
 
@@ -306,20 +337,25 @@ class VnfWrapper(Utils.LoggerHelper):
             except AuthenticationError as e:
                 self._error('AuthenticationError (%s):%s' % (self.name, e))
                 return None
+            # except SessionCloseError as e:
+            #     self._error('SessionCloseError (%s):%s' % (self.name, e))
+            #     return None
             self.netconf_helper = netconf_helper
         return self.netconf_helper
 
     def get_vnf_info(self, vnf_opts=None):
-        "Return status for 'vnf_opts' or for all vnfs if it is None"
+        """Return status for 'vnf_opts' or for all vnfs if it is None"""
         vnf_info = []
         if self.netconf_helper is not None:
             try:
                 vnf_info = self.netconf_helper.rpc("getVNFInfo")
-            except RPCError as e:
+            except RPCError:
                 vnf_info = {}
             vnf_info = vnf_info.get('initiated_vnfs', [])
             if type(vnf_info) != list:
                 vnf_info = [vnf_info]
+            for i in vnf_info:
+                self.vnfs_status[i.get('vnf_id')] = i.get('status')
         if vnf_opts:
             vnf_id = vnf_opts['name']
             vnf_id_netconf = vnf_opts['vnf_id_netconf']
@@ -337,11 +373,14 @@ class VnfWrapper(Utils.LoggerHelper):
             return result
 
     def stop(self, vnf_opts):
-        vnf_id = vnf_opts['name']
+        #vnf_id = vnf_opts['name']
         vnf_id_netconf = vnf_opts['vnf_id_netconf']
         if self.netconf_helper is not None:
             try:
                 self.netconf_helper.rpc("stopVNF", vnf_id = vnf_id_netconf)
+                # we should update mapping and status database at stop
+                del self.id_to_name[vnf_id_netconf]
+                del self.vnfs_status[vnf_id_netconf]
             except RPCError as e:
                 self._warn('Failed to stop vnf %s on node %s: %s'
                            % (vnf_id_netconf, self.name, e))
@@ -351,10 +390,15 @@ class VnfWrapper(Utils.LoggerHelper):
             return
         else:
             # try to stop like a non netconf controlled node
-            self.node.stop()
+            self.node.stopVNF()
 
+    def stop_wrapper(self):
+        if self.netconf_helper is not None:
+            self.netconf_helper.disconnect()
+            self.netconf_helper = None
+            self.vnfs_status = {}
 
-class NodeManagerMininetWrapper:
+class NodeManagerMininetWrapper(Utils.LoggerHelper):
     def __init__(self):
         self.vnf_wrapper = {}
         self.mn = None
@@ -363,15 +407,21 @@ class NodeManagerMininetWrapper:
         self.mn = mininet
 
     def stop(self):
+        node_ids = self.vnf_wrapper.keys()
+        for node_id in node_ids:
+            self.vnf_wrapper[node_id].stop_wrapper()
+            self.delete_vnf_wrapper(node_id)
         self.mn = None
 
     def initialized(self):
         return self.mn is not None
 
     def get_node(self, node_id):
+        #Not used currently
         return self.get_vnf_wrapper(node_id)
 
     def get_vnf_wrapper(self, node_id):
+        """Return with a node in the form of VnfWrapper or a cached one"""
         try:
             return self.vnf_wrapper[node_id]
         except KeyError:
@@ -393,7 +443,13 @@ class NodeManagerMininetWrapper:
 
 
 class VNFManager(Utils.LoggerHelper):
-
+    """
+    Frontend for handling VNFs
+        - Using VNF catalogue
+        - Start/stop/getInfo VNFs - uses VNFWrapper
+        - Start clicky
+        - Create VNF catalogue entry
+    """
     def __init__(self):
         self.vnf_catalog = {}
         self.vnf_to_node = {}
@@ -408,8 +464,9 @@ class VNFManager(Utils.LoggerHelper):
 
     def start_vnfs(self, vnf_to_node_list, vnf_options):
         self.vnf_options = deepcopy(vnf_options)
+
         for vnf_id, node_id in vnf_to_node_list:
-            self.start_vnf_on_node(vnf_id, node_id, self.vnf_options[vnf_id]);
+            self.start_vnf_on_node(vnf_id, node_id, self.vnf_options[vnf_id])
             self.vnf_to_node[vnf_id] = node_id
         try:
             self.node_manager.start_posthook()
@@ -440,7 +497,7 @@ class VNFManager(Utils.LoggerHelper):
         self._debug("Builder class for is %s"%builder_name)
         builder_cls = getattr(VNFBuilders, builder_name, None)
         if not builder_cls:
-            raise RuntimeError("Unknown VNF builder %s"%(builder_name))
+            raise RuntimeError("Unknown VNF builder %s"% builder_name)
 
         builder = builder_cls()
         vnf = builder.create_vnf(options, host)
@@ -448,7 +505,7 @@ class VNFManager(Utils.LoggerHelper):
         return vnf
 
     def get_host_id(self, vnf_id, default=None):
-        "Return host where vnf is started"
+        """Return host where vnf is started"""
         if vnf_id in self.vnf_to_node:
             node_id = self.vnf_to_node[vnf_id]
             vnf_wrapper = self.node_manager.get_vnf_wrapper(node_id)
@@ -463,7 +520,7 @@ class VNFManager(Utils.LoggerHelper):
             return default
 
     def get_vnf_info(self, vnf_opts):
-        'Get info on given VNF'
+        """Get info on given VNF"""
         vnf_id = vnf_opts['name']
         node_id = self.vnf_to_node[vnf_id]
         return self.get_vnf_info_on_node(node_id, vnf_opts)
@@ -478,7 +535,7 @@ class VNFManager(Utils.LoggerHelper):
         return vnf_wrapper.get_vnf_info(vnf_opts)
 
     def stop_vnf(self, vnf_id):
-        'Stop VNF via netconf agent'
+        """Stop VNF via netconf agent"""
         #TODO: indicate resource release (event?)
 
         node_id = self.vnf_to_node.get(vnf_id)
@@ -486,7 +543,7 @@ class VNFManager(Utils.LoggerHelper):
             # this vnf doesn't run anyhere
             return
         vnf_opts = self.vnf_options[vnf_id]
-        vnf_id = vnf_opts['name']
+        #vnf_id = vnf_opts['name']
         vnf_wrapper = self.node_manager.get_vnf_wrapper(node_id)
         vnf_wrapper.stop(vnf_opts)
 
@@ -495,9 +552,9 @@ class VNFManager(Utils.LoggerHelper):
             self.stop_vnf(vnf_id)
 
     def remove_vnf(self, vnf_id):
-        'Remove a vnf from our DB. (Call this when the VNF has been stopped.)'
-        node_id = self.vnf_to_node.get(vnf_id)
-        vnf_opts = self.vnf_options[vnf_id]
+        """Remove a vnf from our DB. (Call this when the VNF has been stopped.)"""
+        #node_id = self.vnf_to_node.get(vnf_id)
+        #vnf_opts = self.vnf_options[vnf_id]
         del self.vnf_to_node[vnf_id]
         del self.vnf_options[vnf_id]
 
@@ -513,15 +570,21 @@ class VNFManager(Utils.LoggerHelper):
         port = opts.get('vnf_control_port')
         return clickgui.makeClicky( mininet_node, control_port=port )
 
-
+# Not implemented
 #Node interface
 class Node(object):
+    """
+    Not implemented
+    """
     def start_vnf(self, vnf):
         raise NotImplementedError()
 
+# Not implemented
 #NodeManager interface
 class NodeManager(object):
-
+    """
+    Not implemented
+    """
     def get_node(self, node_id):
         raise NotImplementedError()
 
@@ -529,7 +592,10 @@ class NodeManager(object):
         raise NotImplementedError()
 
 class DefaultRouteAlgorithm(object):
-
+    """
+    Class for basic mapping algorithm
+    Uses networkx lib
+    """
     def __init__(self):
         self.g = nx.Graph()
         self.valid_type = (NetworkGraphManager.NODE_TYPE_SAP,
@@ -560,7 +626,10 @@ class DefaultRouteAlgorithm(object):
             return None
 
 class RouteManager(Utils.GenericEventNotifyer, Utils.LoggerHelper):
-
+    """
+    Deploy control and store mapped service chains
+    Handle update events
+    """
     def __init__(self, vnf_manager,
                  chain_route_search_algorithm = DefaultRouteAlgorithm,
                  res_route_search_algorithm = DefaultRouteAlgorithm):
@@ -572,7 +641,24 @@ class RouteManager(Utils.GenericEventNotifyer, Utils.LoggerHelper):
         self.vnf_manager = vnf_manager
         self.chain_route_search = chain_route_search_algorithm()
         self.res_route_search = res_route_search_algorithm()
+        # Subscribe for traffic_steering events (RouteChanged)
         boot.core.callLater(boot.core.TrafficSteering.addListeners, self)
+
+    def reset(self):
+        """Reset member vars."""
+        self.route_id = 0
+        del self.dpids
+        del self.port_map
+        del self.routes
+        self.dpids = dict()
+        self.port_map = dict()
+        self.routes = dict()
+        cls = self.chain_route_search.__class__
+        del self.chain_route_search
+        self.chain_route_search = cls()
+        cls = self.res_route_search.__class__
+        del self.res_route_search
+        self.res_route_search = cls()
 
     def get_route_ids(self):
         return self.routes.keys()
@@ -624,6 +710,7 @@ class RouteManager(Utils.GenericEventNotifyer, Utils.LoggerHelper):
                 self._install_one_pending_route(route_id, res_graph)
 
     def _install_one_pending_route(self, route_id, res_graph):
+        # self._debug('RES_GRAPH: %s' % res_graph.nodes())
         self.res_route_search.graph(json_graph.node_link_data(res_graph))
 
         path_stream = []
@@ -699,35 +786,65 @@ class RouteManager(Utils.GenericEventNotifyer, Utils.LoggerHelper):
 
 
 class Orchestrator(object):
-    ""
+    """
+    Orchestrate the NF-FG mapping and the control of network elements
+    """
     def __init__(self, network_manager, route_manager):
+        # Init network_manager for handling (Mininet) network
         self.network_manager = network_manager
+        # Init route_manager for handling and installing service chains
         self.rm = route_manager
 
-    def start(self, nf_g, phy_g):
+    def start(self, nf_g, phy_g=None):
+        """
+        Create the service chain
+            - Do the resource mapping process
+            - Starts the virtual network element
+            - Install the OF routes
+        Return list of the newly initiated VNFs
+        """
         # TODO: instead of phy_g, rely on NetworkManager, or simple_topology
+        
+        # Using NetworkManager to get physical topology if phy_g is not given explicitly
+        if not phy_g:
+            phy_g = self.network_manager.get_initial_topology()
 
-        if nf_g.number_of_nodes() < 1 or \
-           phy_g.number_of_nodes() < 1 or\
-           not self.network_manager.network_alive():
+        # dump(phy_g, 'NetMen converted topo')
+        if nf_g.number_of_nodes() < 1 or phy_g.number_of_nodes() < 1 or not self.network_manager.network_alive():
             return []
-
+            
+        # Run the resource mapping algorithm
         vnf_to_host_list = Mapping.map(nf_g, phy_g, DefaultSorter)
 
         vnf_options = nf_g.node
+        # Config vnf_manager
         vnf_manager = self.network_manager.vnf_manager
         vnf_manager.set_vnf_catalog(Catalog().get_db())
+        # Start mapped VNFs on physical network element
         vnf_manager.start_vnfs(vnf_to_host_list, vnf_options)
+        # Install routes
+        # update states of VNFs run by netconf agents before route install
+        # (to make phy_g consistent (containing remote VNFs as well))
+        self.network_manager.scan_network(forced = True)
+
+        # Error: If phy_g contains initial_topo from NetworkManager,
+        # VNFs are always excluded and no routes will be installed!!
         self.rm.install_routes(nf_g, phy_g)
 
         return vnf_to_host_list
 
     def stop_service_graphs(self):
-        "Stop every service graph."
+        """
+        Stop every service graph
+        RouteManager assumes it could be more service chain
+        MiniEdit can handle only one
+        """
         vnf_manager = self.network_manager.vnf_manager
 
         for route_id in self.rm.get_route_ids():
             vnfs = self.rm.get_vnfs_in_route(route_id)
+            # Remove every stored route
             self.rm.remove_route(route_id)
             for vnf_name in vnfs:
+                # Stop VNFs one by one
                 vnf_manager.stop_vnf(vnf_name)
