@@ -111,6 +111,7 @@ cat <<EOF | sudo tee -a $sshd_config_file
 Port 830
 Port 831
 Port 832
+Port 833
 Subsystem netconf /usr/sbin/netconf-subsystem
 # --- END NETCONF ---
 EOF
