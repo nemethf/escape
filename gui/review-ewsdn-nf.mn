@@ -1,0 +1,93 @@
+{
+    "controllers": [],
+    "hosts": [],
+    "links": [
+        {
+            "dest": "sap2",
+            "opts": {},
+            "src": "header_decompression"
+        },
+        {
+            "dest": "header_compression",
+            "opts": {
+                "delay": 5.0
+            },
+            "src": "sap1"
+        },
+        {
+            "dest": "header_decompression",
+            "opts": {},
+            "src": "header_compression"
+        }
+    ],
+    "startpoints": [
+        {
+            "number": "1",
+            "opts": {
+                "_id": "sap1",
+                "canvas_id": 13,
+                "name": "sap1",
+                "nodeNum": 1,
+                "node_type": "SAP"
+            },
+            "x": "123.0",
+            "y": "62.0"
+        },
+        {
+            "number": "2",
+            "opts": {
+                "_id": "sap2",
+                "canvas_id": 12,
+                "name": "sap2",
+                "nodeNum": 2,
+                "node_type": "SAP"
+            },
+            "x": "125.0",
+            "y": "456.0"
+        }
+    ],
+    "switches": [],
+    "version": "2",
+    "vnfs": [
+        {
+            "number": "2",
+            "opts": {
+                "_id": "vnf2",
+                "canvas_id": 11,
+                "cpu": 0.8,
+                "function": "headerDecompressor",
+                "mem": 0.3,
+                "name": "header_decompression",
+                "nodeNum": 2,
+                "node_type": "VNF",
+                "req": {
+                    "cpu": 0.8,
+                    "mem": 0.3
+                },
+                "vnf_type": "click_vnf"
+            },
+            "x": "124.0",
+            "y": "291.0"
+        },
+        {
+            "number": "1",
+            "opts": {
+                "_id": "vnf1",
+                "canvas_id": 10,
+                "cpu": 0.6,
+                "function": "headerCompressor",
+                "mem": 0.3,
+                "name": "header_compression",
+                "nodeNum": 1,
+                "node_type": "VNF",
+                "req": {
+                    "cpu": 0.6,
+                    "mem": 0.3
+                },
+                "vnf_type": "click_vnf"
+            },
+            "x": "123.0",
+            "y": "176.0"
+        }
+    ]
+}

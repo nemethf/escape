@@ -37,19 +37,19 @@ class RecentlyChanged (Event):
   """
   pass
 
+
 class SimpleTopology (EventMixin):
   """Maintain the network topology in operation."""
-  _eventMixin_events = set([
-    RecentlyChanged,
-  ])
+  _eventMixin_events = {RecentlyChanged}
 
-  def __init__ (self):
-    self._nodes = {}
-    self._timer = False
-    core.listen_to_dependencies(self)
+  def __init__(self):
+      super(SimpleTopology, self).__init__()
+      self._nodes = {}
+      self._timer = False
+      core.listen_to_dependencies(self)
 
   def get_other_end (self, dpid, port_no):
-    ""
+    ### Get opposite node's name, port number, MAC address
     node = self.get_node_by_dpid(dpid)
     port = self._get_port_by_port_no(node, port_no)
     oe = port.get('other_end', {})
@@ -154,7 +154,7 @@ class SimpleTopology (EventMixin):
       log.warn('NodeChange event has no name (%s)' , repr(event.__dict__))
       return
     if event.intf is None:
-      log.warn('Missing info from Interface (%s)', node_name)
+      log.warn('Missing info from Interface (%s)', event.name)
       return
 
     node_name = event.name

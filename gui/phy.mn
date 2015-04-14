@@ -20,9 +20,7 @@
             "opts": {
                 "_id": "h2",
                 "canvas_id": 4,
-                "cpu": 0.9,
                 "hostname": "Container5",
-                "mem": 0.3,
                 "nodeNum": 2,
                 "node_type": "HOST",
                 "res": {
@@ -38,11 +36,9 @@
             "opts": {
                 "_id": "h1",
                 "canvas_id": 2,
-                "cpu": 1.0,
                 "ee_type": "static",
                 "hostname": "Container3",
                 "local_intf_name": "veth0",
-                "mem": 1.0,
                 "netconf_passwd": "jelszo",
                 "netconf_username": "felhasznalonev",
                 "nodeNum": 1,
@@ -66,9 +62,7 @@
             "opts": {
                 "_id": "h5",
                 "canvas_id": 3,
-                "cpu": 0.2,
                 "hostname": "Container4",
-                "mem": 1.0,
                 "nodeNum": 5,
                 "node_type": "HOST",
                 "res": {

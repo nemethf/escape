@@ -18,7 +18,6 @@ Installs routes proactively.
 """
 
 import pox
-from pox.lib.util import dpid_to_str
 from pox.lib.revent import *
 from pox.lib.addresses import EthAddr
 import pox.openflow.libopenflow_01 as of
@@ -62,6 +61,7 @@ class RouteChanged (Event):
   def __str__ (self):
     return "id(%s)-status(%s)" % (self.id, self.get_status_str(self.status))
 
+
 class RouteHop (object):
   INIT = 1
   SENT = 2
@@ -81,10 +81,15 @@ class RouteHop (object):
     self.match = match
 
   def get_flow_mod (self):
+    """
+    Return specific OpenFlow Flow-Mod message
+    - based on the class attributes
+    - to install an OpenFlow flow entry in a specific device
+    """
 
     flow_mod = of.ofp_flow_mod()
     if self.match:
-      flow_mod.match = match
+      flow_mod.match = self.match
     if self.in_port:
       flow_mod.match.in_port = self.in_port
 
@@ -113,11 +118,10 @@ class RouteHop (object):
 
 class TrafficSteering  (EventMixin):
   """Install routes proactively."""
-  _eventMixin_events = set([
-    RouteChanged,
-    ])
+  _eventMixin_events = {RouteChanged}
 
   class Route (object):
+    """Contains RouteHop objects and additional functions"""
     def __init__ (self, id, hops = None):
       self.hops = hops
       self.id = id
@@ -136,17 +140,19 @@ class TrafficSteering  (EventMixin):
       s = [ hop.status == RouteHop.REMOVED for hop in self.hops ]
       return all(s)
 
-  def __init__ (self):
-    self._routes = {}
-    self._pending_barriers = {}
-    self._xid_generator = of.xid_generator()
-    pox.core.core.addListeners(self)
-    pox.core.core.openflow.addListeners(self)
-    pox.core.core.listen_to_dependencies(self)
+  def __init__(self):
+      self._routes = {}
+      self._pending_barriers = {}
+      self._xid_generator = of.xid_generator()
+      pox.core.core.addListeners(self)
+      pox.core.core.openflow.addListeners(self)
+      pox.core.core.listen_to_dependencies(self)
+      super(TrafficSteering, self).__init__()
 
   def add_route (self, id, route):
     log.debug('add_route: %s', id)
-
+    
+    # Error handling
     error = not all([type(hop) == RouteHop for hop in route])
     error = error or len(route) == 0
     if error:
@@ -155,22 +161,30 @@ class TrafficSteering  (EventMixin):
       return
 
     for hop in route:
+      # Set route_id for every RouteHop
       hop.route_id = id
+    # Save the RoutHops as a new Route
     self._routes[id] = self.Route(id, route)
+    # Install the added route
     self._install_route(id)
 
   def remove_route (self, id):
+    # Fire a REMOVING event
     self._change_route_status(self._routes[id], RouteChanged.REMOVING)
     for hop in self._routes.get(id).hops:
+      # Remove every RouteHop(aka flow entry) in the Route given by id
       self._remove_hop(hop)
 
   def _install_route (self, id):
+    # Modify the route's matching thing
     if not self._add_dst_mac_matching(id):
+      # Fire STARTING event
       self._change_route_status(self._routes[id], RouteChanged.STARTING)
       return
 
     for hop in self._routes[id].hops:
       log.debug('add_route: %s,%s', id, hop)
+      # Install every RouteHop(aka flow entry) in the Route given by id
       self._install_hop(hop)
 
   def _add_dst_mac_matching (self, id):
@@ -236,7 +250,9 @@ class TrafficSteering  (EventMixin):
 
     # send the barrier
     barrier_xid = self._xid_generator()
+    # Save the pending RoutHop to change the state later
     self._pending_barriers[barrier_xid] = hop
+    # Set the RouteHop status
     hop.status = RouteHop.SENT
     con.send(of.ofp_barrier_request(xid=barrier_xid))
 
@@ -261,7 +277,9 @@ class TrafficSteering  (EventMixin):
 
     # send the barrier
     barrier_xid = self._xid_generator()
+    # Save the pending RoutHop to change the state later
     self._pending_barriers[barrier_xid] = hop
+    # Set the RouteHop status
     hop.status = RouteHop.SENT_REMOVE
     con.send(of.ofp_barrier_request(xid=barrier_xid))
 
@@ -277,6 +295,7 @@ class TrafficSteering  (EventMixin):
               RouteChanged.get_status_str(new_status))
 
     route.status = new_status
+    # Fire the RouteChanged event
     pox.core.core.raiseLater(self, RouteChanged, route.id, new_status)
 
   def _handle_SimpleTopology_RecentlyChanged (self, event):
@@ -292,6 +311,7 @@ class TrafficSteering  (EventMixin):
     if xid not in self._pending_barriers:
       return EventContinue
 
+    # Set the pending and saved RouteHop status according to the received Barrier msg
     hop = self._pending_barriers.pop(xid)
     if hop.status == RouteHop.SENT:
       hop.status = RouteHop.INSTALLED

@@ -45,6 +45,8 @@ def add_VNFs():
     Catalog().add_VNF(vnf_name='RFC2507Comp',vnf_type='Click',hidden='True')
     Catalog().add_VNF(vnf_name='RFC2507Decomp',vnf_type='Click',hidden='True')
     Catalog().add_VNF(vnf_name='IPAddRewriter',vnf_type='Click',hidden='True')
+    Catalog().add_VNF(vnf_name='TCPOptimizer',vnf_type='Click',hidden='True')
+    Catalog().add_VNF(vnf_name='MarkIPHeader',vnf_type='Click',hidden='True')
 
     #2. Then the VNFs composed of several Click elements are added to the DB
     Catalog().add_VNF(vnf_name = 'simpleForwarder',
@@ -67,8 +69,12 @@ def add_VNFs():
                       vnf_type = 'Click',
                       hidden = 'True',
                       description = 'Provide the functionality of basic network address translator')
+    Catalog().add_VNF(vnf_name = 'tcpRWINOptimizer',
+                      vnf_type = 'Click',
+                      description = 'TCP Optimizer',
+                      icon = 'forward.png')
 
-    # print Catalog().get_db()
+    print Catalog().get_db()
 
 if __name__ == '__main__':
 
@@ -76,6 +82,7 @@ if __name__ == '__main__':
               'simpleObservationPoint',
               'headerCompressor',
               'headerDecompressor',
+              'tcpRWINOptimizer',
               'nat'])
 
     add_VNFs()

@@ -10,14 +10,15 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
 # General Public License for more details.
 
-'''
+"""
 Created on Jul 15, 2014
 
 @author: csoma
-'''
-import pox
+"""
 import threading
-from time import sleep
+
+import pox.core
+
 
 log = None
 
@@ -27,9 +28,12 @@ class CoreInitListener  (object):
   condition = threading.Condition()
 
   def __init__ (self):
+    # Register for core events
     pox.core.core.addListeners(self)
 
   def _handle_UpEvent (self, event):
+    """Handle the UpEvent of the pox.core object"""
+    # Notify the waiting threads that the POX (pox.core) is up and running
     CoreInitListener.condition.acquire()
     CoreInitListener.condition.notify()
     CoreInitListener.condition.release()
@@ -38,4 +42,5 @@ class CoreInitListener  (object):
 def launch ():
   global log
   log = pox.core.core.getLogger()
+  # Register self into the pox.core object 
   pox.core.core.register(CoreInitListener())
