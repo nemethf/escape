@@ -2,7 +2,7 @@
 
 """
 This example shows how to create an empty Mininet object
-(without a topology object) and add nodes to it manually.
+(without a topology object) and add nodes and VNFs to it manually.
 """
 
 from mininet.net import Mininet, MininetWithControlNet
@@ -17,18 +17,13 @@ class InbandController( RemoteController ):
         return
 
 def netWithVNFs(netconf = False):
-    "Create an empty network and add nodes to it."
+    "Create an empty network and add nodes and VNFs to it."
 
-    #ctl = InbandController( 'ctl', ip='192.168.123.1' )
-    #ctl = InbandController( 'ctl', ip='127.0.0.1' )
-    #net = MininetWithControlNet( )
     net = MininetWithControlNet( controller=Controller, autoSetMacs=True )
-    #net = Mininet( controller=Controller )
 
     info( '*** Adding controller\n' )
     ctl = net.addController( 'c0' , controller=RemoteController )
  
-    #import pdb; pdb.set_trace();
     info( '*** Adding hosts \n' )
     h1 = net.addHost( 'h1')
     h2 = net.addHost( 'h2')
@@ -40,18 +35,12 @@ def netWithVNFs(netconf = False):
         ee1.setVNF(vnf_name='netconf')
         ee2 = net.addEE( 'ee2' )
         ee2.setVNF(vnf_name='netconf')
-        #[ exe1_sw, exe1_container ] = net.addManagedExe( 'exe1', nintf=5)
-        #exe1_container.cmd = netconf.makeNetConfCmd()
     else:
         ee1 = net.addEE( 'ee1',cpu=0.1)
-        #ee1.setVNF(vnf_name='fakeLoad', cpu='8', mem='5MB')
         ee1.setVNF(vnf_name='simpleForwarder', name=ee1.name)
         ee2 = net.addEE( 'ee2',cpu=0.1)
-        ee2.setVNF(vnf_name='simpleObservationPoint', name=ee2.name)
-        #ee2.setVNF(vnf_name='fakeLoad', cpu='8', mem='5MB')
-        #ee2.setVNF(vnf_name='lookbusy',
-        #    mem_util='5MB', cpu_util='8-20', cpu_mode='curve',
-        #    cpu_curve_period='5m', cpu_curve_peak='2m' )
+        #ee2.setVNF(vnf_name='fakeload', name=ee2.name, cpu='8', mem='5MB')
+        ee2.setVNF(vnf_name='simpleForwarder')
 
     info( '*** Adding switches\n' )
     s3 = net.addSwitch( 's3' )

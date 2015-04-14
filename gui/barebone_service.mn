@@ -1,0 +1,40 @@
+{
+    "controllers": [],
+    "hosts": [],
+    "links": [
+        {
+            "dest": "sap2",
+            "opts": {},
+            "src": "sap1"
+        }
+    ],
+    "startpoints": [
+        {
+            "number": "2",
+            "opts": {
+                "_id": 1,
+                "canvas_id": 2,
+                "name": "sap2",
+                "nodeNum": 2,
+                "node_type": "SAP"
+            },
+            "x": "129.0",
+            "y": "263.0"
+        },
+        {
+            "number": "1",
+            "opts": {
+                "_id": 0,
+                "canvas_id": 1,
+                "name": "sap1",
+                "nodeNum": 1,
+                "node_type": "SAP"
+            },
+            "x": "141.0",
+            "y": "94.0"
+        }
+    ],
+    "switches": [],
+    "version": "2",
+    "vnfs": []
+}

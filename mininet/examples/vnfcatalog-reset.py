@@ -39,14 +39,21 @@ def add_VNFs():
     Catalog().add_VNF(vnf_name='Counter',vnf_type='Click',hidden='True')
     Catalog().add_VNF(vnf_name='Classifier',vnf_type='Click',hidden='True')
     Catalog().add_VNF(vnf_name='IPClassifier',vnf_type='Click',hidden='True')
+    Catalog().add_VNF(vnf_name='StripIPHeader',vnf_type='Click',hidden='True')
+    Catalog().add_VNF(vnf_name='UnstripIPHeadet',vnf_type='Click',hidden='True')
+    Catalog().add_VNF(vnf_name='Strip',vnf_type='Click',hidden='True')
+    Catalog().add_VNF(vnf_name='Unstrip',vnf_type='Click',hidden='True')
     Catalog().add_VNF(vnf_name='ICMPPingSource',vnf_type='Click',hidden='True')
     Catalog().add_VNF(vnf_name='ARPQuerier',vnf_type='Click',hidden='True')
     Catalog().add_VNF(vnf_name='AggregateIPFlows',vnf_type='Click',hidden='True')
     Catalog().add_VNF(vnf_name='RFC2507Comp',vnf_type='Click',hidden='True')
     Catalog().add_VNF(vnf_name='RFC2507Decomp',vnf_type='Click',hidden='True')
     Catalog().add_VNF(vnf_name='IPAddRewriter',vnf_type='Click',hidden='True')
+
     Catalog().add_VNF(vnf_name='TCPOptimizer',vnf_type='Click',hidden='True')
     Catalog().add_VNF(vnf_name='MarkIPHeader',vnf_type='Click',hidden='True')
+
+    Catalog().add_VNF(vnf_name='Print',vnf_type='Click',hidden='True')
 
     #2. Then the VNFs composed of several Click elements are added to the DB
     Catalog().add_VNF(vnf_name = 'simpleForwarder',
@@ -73,7 +80,18 @@ def add_VNFs():
                       vnf_type = 'Click',
                       description = 'TCP Optimizer',
                       icon = 'forward.png')
-
+    Catalog().add_VNF(vnf_name = 'testVNF',
+                      vnf_type = 'Click',
+                      description = 'A test VNF',
+                      icon = 'forward.png')
+    Catalog().add_VNF(vnf_name = 'RlncOnTheFlyEncoder',
+                      vnf_type = 'Click',
+                      description = 'Rlnc encoder with kodo.',
+                      icon = 'forward.png')
+    Catalog().add_VNF(vnf_name = 'RlncOnTheFlyDecoder',
+                      vnf_type = 'Click',
+                      description = 'Rlnc decoder with kodo',
+                      icon = 'forward.png')
     print Catalog().get_db()
 
 if __name__ == '__main__':
@@ -83,6 +101,9 @@ if __name__ == '__main__':
               'headerCompressor',
               'headerDecompressor',
               'tcpRWINOptimizer',
-              'nat'])
+              'nat',
+              'testVNF',
+              'RlncOnTheFlyEncoder',
+              'RlncOnTheFlyDecoder'])
 
     add_VNFs()

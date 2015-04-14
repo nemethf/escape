@@ -1,0 +1,176 @@
+{
+    "controllers": [],
+    "hosts": [],
+    "links": [
+        {
+            "dest": "Encoder",
+            "opts": {},
+            "src": "sap1"
+        },
+        {
+            "dest": "Decoder",
+            "opts": {},
+            "src": "Encoder"
+        },
+        {
+            "dest": "Recoder3",
+            "opts": {},
+            "src": "Decoder"
+        },
+        {
+            "dest": "Recoder1",
+            "opts": {},
+            "src": "Encoder"
+        },
+        {
+            "dest": "Recoder2",
+            "opts": {},
+            "src": "Encoder"
+        },
+        {
+            "dest": "Recoder3",
+            "opts": {},
+            "src": "Encoder"
+        },
+        {
+            "dest": "Decoder",
+            "opts": {},
+            "src": "Recoder1"
+        },
+        {
+            "dest": "sap2",
+            "opts": {},
+            "src": "Decoder"
+        }
+    ],
+    "startpoints": [
+        {
+            "number": "1",
+            "opts": {
+                "_id": 0,
+                "canvas_id": 6,
+                "name": "sap1",
+                "nodeNum": 1,
+                "node_type": "SAP"
+            },
+            "x": "145.0",
+            "y": "57.0"
+        },
+        {
+            "number": "2",
+            "opts": {
+                "_id": 1,
+                "canvas_id": 10,
+                "name": "sap2",
+                "nodeNum": 2,
+                "node_type": "SAP"
+            },
+            "x": "136.0",
+            "y": "448.0"
+        }
+    ],
+    "switches": [],
+    "version": "2",
+    "vnfs": [
+        {
+            "number": "2",
+            "opts": {
+                "_id": 3,
+                "canvas_id": 4,
+                "cpu": 0.8,
+                "function": "simpleForwarder",
+                "mem": 0.1,
+                "name": "Decoder",
+                "nodeNum": 2,
+                "node_type": "VNF",
+                "req": {
+                    "cpu": 0.8,
+                    "mem": 0.1
+                },
+                "vnf_type": "click_vnf"
+            },
+            "x": "139.0",
+            "y": "350.0"
+        },
+        {
+            "number": "1",
+            "opts": {
+                "_id": 2,
+                "canvas_id": 2,
+                "cpu": 0.8,
+                "function": "simpleForwarder",
+                "mem": 0.1,
+                "name": "Encoder",
+                "nodeNum": 1,
+                "node_type": "VNF",
+                "req": {
+                    "cpu": 0.8,
+                    "mem": 0.1
+                },
+                "vnf_type": "click_vnf"
+            },
+            "x": "144.0",
+            "y": "158.0"
+        },
+        {
+            "number": "3",
+            "opts": {
+                "_id": 4,
+                "canvas_id": 3,
+                "cpu": 0.8,
+                "function": "simpleForwarder",
+                "mem": 0.1,
+                "name": "Recoder3",
+                "nodeNum": 3,
+                "node_type": "VNF",
+                "req": {
+                    "cpu": 0.8,
+                    "mem": 0.1
+                },
+                "vnf_type": "click_vnf"
+            },
+            "x": "236.0",
+            "y": "248.0"
+        },
+        {
+            "number": "4",
+            "opts": {
+                "_id": 5,
+                "canvas_id": 1,
+                "cpu": 0.8,
+                "function": "simpleForwarder",
+                "mem": 0.1,
+                "name": "Recoder2",
+                "nodeNum": 4,
+                "node_type": "VNF",
+                "req": {
+                    "cpu": 0.8,
+                    "mem": 0.1
+                },
+                "vnf_type": "click_vnf"
+            },
+            "x": "145.0",
+            "y": "250.0"
+        },
+        {
+            "number": "5",
+            "opts": {
+                "_id": 6,
+                "canvas_id": 5,
+                "cpu": 0.8,
+                "function": "simpleForwarder",
+                "mem": 0.1,
+                "name": "Recoder1",
+                "nodeNum": 5,
+                "node_type": "VNF",
+                "req": {
+                    "cpu": 0.8,
+                    "mem": 0.1
+                },
+                "vnf_type": "click_vnf"
+            },
+            "x": "52.0",
+            "y": "250.0"
+        }
+    ]
+}
