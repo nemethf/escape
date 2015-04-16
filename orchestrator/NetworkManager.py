@@ -365,8 +365,9 @@ class NetworkManagerMininet(NetworkManager,
             if params.get('type', None) == 'data':
                 network_topo['links'][(node1, node2)] = {'node1': node1,
                                                          'node2': node2,
-                                                         'delay': params['delay'],
                                                          'cls': TCLink}
+                if 'delay' in params:
+                    network_topo['links'][(node1, node2)]['delay'] = params.get('delay', 5)
                 if 'bw' in params:
                     network_topo['links'][(node1, node2)]['bw'] = params['bw']
                 self._debug("Create link between %s : %s with parameters %s" % (node1, node2, network_topo['links'][(node1, node2)]))
@@ -540,7 +541,8 @@ class NetworkManagerMininet(NetworkManager,
                 if 'bw' in links[(node1, node2)]:
                     options['bw'] = links[(node1, node2)]['bw']
                 options['type'] = LINK_TYPE['DATA']
-                options['delay'] = links[(node1, node2)]['delay']
+                if 'delay' in links[(node1, node2)]:
+                    options['delay'] = links[(node1, node2)].get('delay', 5)
             graph.add_edge(node1, node2, attr_dict=options)
 
         # Adding control channel links
