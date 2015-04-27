@@ -1,0 +1,19 @@
+require(package "mypackage")
+
+output :: Queue() -> ToDevice({{VNFDEV0}});
+
+        FromDevice({{VNFDEV0}})
+        -> c::Classifier(12/0800, -)
+        -> Strip(14)
+        -> CheckIPHeader
+        -> ipc::IPClassifier(udp,-)
+	-> Counter()
+        -> StripIPHeader()
+        -> Strip(8) //strip the UDP header
+        -> FullRLNCEncoder(GENERATION_SIZE 30, SYMBOL_SIZE 1316, EXTRA 10)
+        -> Unstrip(8) // unstrip UDP header
+        -> UnstripIPHeader // unstrip IP header
+        -> Unstrip(14)
+        -> output
+c[1] -> output
+ipc[1]->output

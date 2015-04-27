@@ -92,6 +92,19 @@ def add_VNFs():
                       vnf_type = 'Click',
                       description = 'Rlnc decoder with kodo',
                       icon = 'forward.png')
+    Catalog().add_VNF(vnf_name = 'FullRlncEncoder',
+                      vnf_type = 'Click',
+                      description = 'Full rlnc encoder with kodo.',
+                      icon = 'forward.png')
+    Catalog().add_VNF(vnf_name = 'FullRlncDecoder',
+                      vnf_type = 'Click',
+                      description = 'Full rlnc decoder with kodo',
+                      icon = 'forward.png')
+    Catalog().add_VNF(vnf_name = 'FullRlncRecoder',
+                      vnf_type = 'Click',
+                      description = 'Full rlnc recoder with kodo',
+                      icon = 'forward.png')
+
     print Catalog().get_db()
 
 if __name__ == '__main__':
@@ -103,6 +116,9 @@ if __name__ == '__main__':
               'tcpRWINOptimizer',
               'nat',
               'testVNF',
+              'FullRlncEncoder',
+              'FullRlncDecoder',
+              'FullRlncRecoder',
               'RlncOnTheFlyEncoder',
               'RlncOnTheFlyDecoder'])
 
