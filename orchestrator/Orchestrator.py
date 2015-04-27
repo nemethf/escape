@@ -222,7 +222,7 @@ class Mapping(object):
     def get_accessible_vnf_list(stnodes, g):
         vnf_list = dict()
         for s,t in stnodes:
-            node_list = nx.node_connected_component(g, s)
+            node_list = nx.node_connected_component(g.to_undirected(), s)
             #if the target is not reachable from the source, the chain
             #is not valid
             if t not in node_list:
@@ -683,10 +683,14 @@ class RouteManager(Utils.GenericEventNotifyer, Utils.LoggerHelper):
                         (s, t, backroute))
 
         route_id = self.next_route_id()
+        s_mac = self.vnf_manager.node_manager.get_node(s).mac
+        t_mac = self.vnf_manager.node_manager.get_node(t).mac
         self.routes[route_id] = { 'chain': [],
                                   'res': [],
                                   'status': RouteChanged.PENDING,
                                   'res_graph': res_graph,
+                                  'src_mac': s_mac,
+                                  'dst_mac': t_mac,
                                   }
 
         if backroute:
@@ -696,9 +700,7 @@ class RouteManager(Utils.GenericEventNotifyer, Utils.LoggerHelper):
             # send backward traffic directly to the source:
             chain_hops = [(s, t)]
         else:
-            route_search = self.chain_route_search
-            route_search.graph(json_graph.node_link_data(chain_graph))
-            chain_hops = route_search.chain_hops(s, t)
+            chain_hops = chain_graph.edges()
 
         self.routes[route_id]['chain'] = chain_hops
         self._fire_route_state_change(None, route_id)
@@ -713,15 +715,16 @@ class RouteManager(Utils.GenericEventNotifyer, Utils.LoggerHelper):
         # self._debug('RES_GRAPH: %s' % res_graph.nodes())
         self.res_route_search.graph(json_graph.node_link_data(res_graph))
 
-        path_stream = []
+        tunnels = []
         self.routes[route_id]['res'] = []
         chain_hops = self.routes[route_id]['chain']
         for u, v in chain_hops:
             self._debug('\tNext hop in chain view: %s - %s'%(u, v))
             u_host = self.vnf_manager.get_host_id(u, u)
             v_host = self.vnf_manager.get_host_id(v, v)
+            tunnel_hops = []
             self._debug('\tTranslated to %s - %s'%(u_host, v_host))
-            res_hops = self.res_route_search.res_hops(u_host,v_host)
+            res_hops = self.res_route_search.res_hops(u_host, v_host)
             if not res_hops:
                 # route not (yet) available:
                 self._debug('no route between: %s-%s' % (u_host, v_host))
@@ -729,28 +732,34 @@ class RouteManager(Utils.GenericEventNotifyer, Utils.LoggerHelper):
             for i,j in res_hops:
                 self._debug('\t\tNext hop in res view: %s - %s'%(i,j))
                 self.routes[route_id]['res'].append((i,j))
-                path_stream.append(i)
+                tunnel_hops.append(i)
                 last = j
-        path_stream.append(last)
+            tunnel_hops.append(last)
+            tunnels.append(tunnel_hops)
 
         self.routes[route_id]['status'] = RouteChanged.STARTING
         self._fire_route_state_change(None, route_id)
 
-        route_fwd = []
-        for idx, e in enumerate(path_stream):
-            if e in self.dpids:
-                dpid = self.dpids[e]
-                if dpid < 0:
-                    continue
-                source_port = self.port_map[e][path_stream[idx-1]]
-                destination_port = self.port_map[e][path_stream[idx+1]]
-                self._debug('Route hop:(dpid> in-p -- out-p) %s>%s -- %s'
-                           %(dpid, source_port, destination_port))
-                r = RouteHop(dpid, source_port, destination_port)
-                route_fwd.append(r)
+        tunnel2 = []            # tunnel with port info
+        for tunnel_hops in tunnels:
+            tunnel_hops2 = []
+            for idx, e in enumerate(tunnel_hops):
+                if e in self.dpids:
+                    dpid = self.dpids[e]
+                    if dpid < 0:
+                        continue
+                    src_port = self.port_map[e][tunnel_hops[idx-1]]
+                    dst_port = self.port_map[e][tunnel_hops[idx+1]]
+                    self._debug('Route hop:(dpid> in-p -- out-p) %s>%s -- %s'
+                                %(dpid, src_port, dst_port))
+                    r = RouteHop(dpid, src_port, dst_port)
+                    tunnel_hops2.append(r)
+            tunnel2.append(tunnel_hops2)
 
-        core.core.callLater(core.core.TrafficSteering.add_route,
-                            route_id, route_fwd)
+        src_mac = self.routes[route_id]['src_mac']
+        dst_mac = self.routes[route_id]['dst_mac']
+        core.core.callLater(core.core.TrafficSteering.add_tunnels,
+                            route_id, tunnel2, src_mac, dst_mac)
 
     def remove_route(self, route_id):
         core.core.callLater(core.core.TrafficSteering.remove_route,

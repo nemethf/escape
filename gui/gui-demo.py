@@ -1251,7 +1251,7 @@ class MiniEdit( Frame, Utils.LoggerHelper ):
         self.rm.register_listener(self)
 
         # Init network function and physical graphs
-        self.nf_g = networkx.Graph()
+        self.nf_g = networkx.DiGraph()
         self.phy_g = networkx.Graph()
         # Init Orchestrator
         self.orchestrator = Orchestrator.Orchestrator(self.network_manager,

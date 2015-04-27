@@ -79,6 +79,7 @@ class RouteHop (object):
     self.set_dst_mac = None
     self.match_dst_mac = None
     self.match = match
+    self.extra = []
 
   def get_flow_mod (self):
     """
@@ -92,15 +93,16 @@ class RouteHop (object):
       flow_mod.match = self.match
     if self.in_port:
       flow_mod.match.in_port = self.in_port
-
     if self.match_dst_mac:
       flow_mod.match.dl_dst = EthAddr(self.match_dst_mac)
-    if self.set_dst_mac:
-      action = of.ofp_action_dl_addr.set_dst(EthAddr(self.set_dst_mac))
-      flow_mod.actions.append(action)
 
-    out_action = of.ofp_action_output(port = self.out_port)
-    flow_mod.actions.append(out_action)
+    extra = [(self.out_port, self.set_dst_mac)] + self.extra
+    for (out_port, set_dst_mac) in extra:
+      if set_dst_mac:
+        action = of.ofp_action_dl_addr.set_dst(EthAddr(set_dst_mac))
+        flow_mod.actions.append(action)
+      out_action = of.ofp_action_output(port = out_port)
+      flow_mod.actions.append(out_action)
 
     return flow_mod
 
@@ -140,6 +142,50 @@ class TrafficSteering  (EventMixin):
       s = [ hop.status == RouteHop.REMOVED for hop in self.hops ]
       return all(s)
 
+  class MPRoute (object):
+    """Contains RouteHop objects and additional functions"""
+    def __init__ (self, id, tunnels, src_mac, dst_mac):
+      self.tunnels = tunnels
+      self.id = id
+      self.status = ROUTE_REMOVED
+      self.src_mac = EthAddr(src_mac)
+      self.dst_mac = EthAddr(dst_mac)
+
+    def is_first (self, hop):
+      t = pox.core.core.SimpleTopology
+      id, port_no, mac = t.get_other_end(hop.dpid, hop.in_port)
+
+      return ( EthAddr(self.src_mac) == EthAddr(mac) )
+
+    def get_first_hop (self):
+      # this won't work if there are multiple "first" switches, i.e.,
+      # when the sap is connected with multiple switches.
+
+      for t in self.tunnels:
+        if self.is_first(t[0]):
+          return t[0]
+
+    def _is_tail_ready (self):
+      hops = []
+      for t in self.tunnels:
+        hops = hops + t[1:]
+      s = [ hop.status == RouteHop.INSTALLED for hop in hops ]
+      return all(s)
+
+    def _is_route_ready (self):
+      hops = []
+      for t in self.tunnels:
+        hops = hops + t
+      s = [ hop.status == RouteHop.INSTALLED for hop in hops ]
+      return all(s)
+
+    def _is_route_removed (self):
+      hops = []
+      for t in self.tunnels:
+        hops = hops + t
+      s = [ hop.status == RouteHop.REMOVED for hop in hops ]
+      return all(s)
+
   def __init__(self):
       self._routes = {}
       self._pending_barriers = {}
@@ -151,7 +197,7 @@ class TrafficSteering  (EventMixin):
 
   def add_route (self, id, route):
     log.debug('add_route: %s', id)
-    
+
     # Error handling
     error = not all([type(hop) == RouteHop for hop in route])
     error = error or len(route) == 0
@@ -168,12 +214,35 @@ class TrafficSteering  (EventMixin):
     # Install the added route
     self._install_route(id)
 
+  def add_tunnels (self, id, tunnels, src, dst):
+    log.debug('add_tunnels: %s', id)
+    
+    # Error handling
+    error = False
+    for t in tunnels:
+      error = error or not all([type(hop) == RouteHop for hop in t])
+    error = error or len(tunnels) == 0
+    if error:
+      log.error('invaild route: %s', tunnels)
+      pox.core.core.raiseLater(self, RouteChanged, id, RouteChanged.FAILED)
+      return
+
+    for t in tunnels:
+      for hop in t:
+        # Set route_id for every RouteHop
+        hop.route_id = id
+    # Save the RoutHops as a new Route
+    self._routes[id] = self.MPRoute(id, tunnels, src, dst)
+    # Install the added route
+    self._install_route(id)
+
   def remove_route (self, id):
     # Fire a REMOVING event
     self._change_route_status(self._routes[id], RouteChanged.REMOVING)
-    for hop in self._routes.get(id).hops:
-      # Remove every RouteHop(aka flow entry) in the Route given by id
-      self._remove_hop(hop)
+    for tunnel in self._routes[id].tunnels:
+      for hop in tunnel:
+        # Remove every RouteHop(aka flow entry) in the Route given by id
+        self._remove_hop(hop)
 
   def _install_route (self, id):
     # Modify the route's matching thing
@@ -182,10 +251,11 @@ class TrafficSteering  (EventMixin):
       self._change_route_status(self._routes[id], RouteChanged.STARTING)
       return
 
-    for hop in self._routes[id].hops:
-      log.debug('add_route: %s,%s', id, hop)
-      # Install every RouteHop(aka flow entry) in the Route given by id
-      self._install_hop(hop)
+    for tunnel in self._routes[id].tunnels:
+      for hop in tunnel:
+        log.debug('add_route: %s,%s', id, hop)
+        # Install every RouteHop(aka flow entry) in the Route given by id
+        self._install_hop(hop)
 
   def _add_dst_mac_matching (self, id):
     """
@@ -210,33 +280,37 @@ class TrafficSteering  (EventMixin):
     last_mac = None
     mac = None
     t = pox.core.core.SimpleTopology
-    hops = self._routes[id].hops
+    tunnels = self._routes[id].tunnels
 
-    for hop in reversed(hops):
-      # next node
-      n_id, n_port_no, n_mac = t.get_other_end(hop.dpid, hop.out_port)
-      if t.non_switch_node(n_id):
-        mac = n_mac
-        if not mac:
-          return False
-        if not last_mac:
-          last_mac = mac
-        hop.set_dst_mac = last_mac
+    for tunnel in tunnels:
+      # egress node
+      e_hop = tunnel[-1]
+      e_id, e_port_no, e_mac = t.get_other_end(e_hop.dpid, e_hop.out_port)
+      # ingress node
+      i_hop = tunnel[0]
+      i_id, i_port_no, i_mac = t.get_other_end(i_hop.dpid, i_hop.in_port)
 
-      # previous node
-      p_id, p_node_no, p_mac = t.get_other_end(hop.dpid, hop.in_port)
-      if t.non_switch_node(p_id):
-        if not hop.set_dst_mac:
-          hop.set_dst_mac = mac
-      else:
-        hop.match_dst_mac = mac
+      for h in tunnel[1:]:
+        h.match_dst_mac = e_mac
+      e_hop.set_dst_mac = self._routes[id].dst_mac
+      i_hop.set_dst_mac = e_mac
+
+
+    for t1 in tunnels:
+      for t2 in tunnels:
+        if t1 == t2:
+          continue
+        if ((t1[0].in_port == t2[0].in_port) and
+            (t1[0].dpid == t2[0].dpid)) :
+          ## multipath traffic if traffic coming from the same
+          ## source to the first hop of the tunnel.
+          t1[0].extra = t1[0].extra + [(t2[0].out_port, t2[0].set_dst_mac)]
 
     return True
 
   def _install_hop (self, hop):
     route = self._routes[hop.route_id]
-    first = ( route.hops[0] == hop )
-    if first and not route._is_tail_ready():
+    if route.is_first(hop) and not route._is_tail_ready():
       return
 
     # send the flow_mod
@@ -328,22 +402,24 @@ class TrafficSteering  (EventMixin):
     elif route._is_route_ready():
       self._change_route_status(route, RouteChanged.STARTED)
     elif route._is_tail_ready():
-      self._install_hop(route.hops[0])
+      self._install_hop(route.get_first_hop())
 
     return EventHalt
 
   def _handle_ConnectionDown (self, event):
     for r in self._routes.itervalues():
-      for h in r.hops:
-        if h.dpid == event.dpid:
-          h.status = RouteHop.INIT
-          self._change_route_status(r, ROUTE_FAILED)
+      for t in r.tunnels:
+        for h in t:
+          if h.dpid == event.dpid:
+            h.status = RouteHop.INIT
+            self._change_route_status(r, ROUTE_FAILED)
 
   def _handle_ConnectionUp (self, event):
     for r in self._routes.itervalues():
-      for hop in r.hops:
-        if hop.dpid == event.dpid:
-          self._install_hop(hop)
+      for t in r.tunnels:
+        for hop in t:
+          if hop.dpid == event.dpid:
+            self._install_hop(hop)
 
 
 def launch ():
